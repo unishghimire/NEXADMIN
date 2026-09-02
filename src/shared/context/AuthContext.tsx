@@ -148,7 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // Super-admin email gets admin role on profile
                 const isSuperAdminInit = SUPER_ADMIN_EMAILS.includes(firebaseUser.email || '');
                 setProfile(isSuperAdminInit ? { ...nextProfile, role: 'admin' } : nextProfile);
-                setUser(prev => prev ? { ...prev, username: nextProfile.username, role: nextProfile.role || 'player' } : prev);
+                setUser(prev => prev ? { ...prev, username: nextProfile.username, role: isSuperAdminInit ? 'admin' : (nextProfile.role || 'player') } : prev);
             }
         } catch (error: any) {
             console.error('Auth: profile initialization failed:', error);

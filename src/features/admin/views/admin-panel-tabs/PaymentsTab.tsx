@@ -143,7 +143,7 @@ export const PaymentsTab: React.FC<AdminPanelTabProps> = (props) => {
                         onClick={() => {
                             setEditingPayment(null);
                             setPaymentName('');
-                            setPaymentCategoryId(paymentCategories.length === 1 ? paymentCategories[0].id : '');
+                            setPaymentCategoryId(paymentCategories.length > 0 ? paymentCategories[0].id : '');
                             setPaymentQr('');
                             setPaymentInstructions('');
                             setPaymentType('eSewa');
