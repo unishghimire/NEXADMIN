@@ -1,11 +1,11 @@
 import React from 'react';
-import {Users, X, Search, Edit, Megaphone, Trophy} from 'lucide-react';
+import {Users, X, Search, Edit, Megaphone, Trophy, Unlock} from 'lucide-react';
 
 import { AdminPanelTabProps } from './types';
 import { DEFAULT_BANNER } from '../../../../shared/constants/constants';
 
 export const TournamentsTab: React.FC<AdminPanelTabProps> = (props) => {
-    const { allTournaments, formatGameName, handleCancelTournament, handleEditTournament, handleToggleFeatured, handleViewParticipants, searchQuery, setSearchQuery } = props;
+    const { allTournaments, formatGameName, handleCancelTournament, handleEditTournament, handleToggleFeatured, handleUnlockTournament, handleViewParticipants, searchQuery, setSearchQuery } = props;
     return (
                 <div className="bg-card p-6 rounded-2xl border border-slate-800 space-y-6">
                     <div className="flex justify-between items-center border-b border-slate-700 pb-4">
@@ -59,6 +59,17 @@ export const TournamentsTab: React.FC<AdminPanelTabProps> = (props) => {
                                                         title="Edit Tournament"
                                                     >
                                                         <Edit className="w-4 h-4" />
+                                                    </button>
+                                                    <button type="button" 
+                                                        onClick={() => handleUnlockTournament && handleUnlockTournament(t)}
+                                                        className={`p-2.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors border ${
+                                                            t.fundingStatus === 'RESERVED'
+                                                                ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600 hover:text-white'
+                                                                : 'bg-amber-500 hover:bg-amber-400 text-black border-amber-400 shadow-lg shadow-amber-500/20 font-black animate-pulse'
+                                                        }`}
+                                                        title={t.fundingStatus === 'RESERVED' ? "Funding Secured (Click to re-verify)" : "Click to Unlock Registration (Admin Escrow Bypass)"}
+                                                    >
+                                                        <Unlock className="w-4 h-4" />
                                                     </button>
                                                     <button type="button" 
                                                         onClick={() => handleToggleFeatured(t)}

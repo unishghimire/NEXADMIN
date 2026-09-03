@@ -1142,6 +1142,28 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         window.open(`/tournaments/${tournament.id}`, '_blank');
     };
 
+    const handleUnlockTournament = async (tournament: Tournament) => {
+        try {
+            const isScrim = (tournament as any).matchType === 'scrims' || (tournament as any).isScrim === true;
+            const updatePayload: any = {
+                status: 'upcoming',
+                fundingStatus: 'RESERVED',
+                reservedFunding: tournament.prizePool || 0,
+                requiredFunding: tournament.prizePool || 0,
+                updatedAt: serverTimestamp()
+            };
+            await updateDoc(doc(db, 'tournaments', tournament.id), updatePayload);
+            if (isScrim) {
+                await setDoc(doc(db, 'scrims', tournament.id), updatePayload, { merge: true }).catch(() => {});
+            }
+            setAllTournaments(prev => prev.map(t => t.id === tournament.id ? { ...t, ...updatePayload } : t));
+            showToast(`"${tournament.title}" unlocked! Registration is now open.`, 'success');
+        } catch (error: any) {
+            console.error("Error unlocking tournament:", error);
+            showToast(error.message || 'Failed to unlock tournament', 'error');
+        }
+    };
+
     const handleSaveSettings = async () => {
         try {
             const settingsData = {
@@ -1463,6 +1485,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             handleToggleFeatured,
             handleUpdateUserRole,
             handleViewParticipants,
+            handleUnlockTournament,
             isCategoryModalOpen,
             isGameModalOpen,
             isPaymentModalOpen,

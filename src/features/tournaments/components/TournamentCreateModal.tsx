@@ -237,8 +237,9 @@ const TournamentCreateModal: React.FC<TournamentCreateModalProps> = ({ isOpen, o
       })) : formData.slots;
 
       const requiredFunding = Math.max(0, Math.round(Number(formData.prizePool || 0)));
-      const initialFundingStatus = requiredFunding === 0 ? 'NOT_REQUIRED' : 'PENDING_FUNDING';
-      const initialStatus = requiredFunding === 0 ? 'upcoming' : 'pending_funding';
+      // Admin privilege: Events created or updated in NEXADMIN default to funded/active
+      const initialFundingStatus = requiredFunding === 0 ? 'NOT_REQUIRED' : 'RESERVED';
+      const initialStatus = isScrim ? 'open' : 'upcoming';
 
       const tournamentData = {
         ...publicFormData,
@@ -250,10 +251,14 @@ const TournamentCreateModal: React.FC<TournamentCreateModalProps> = ({ isOpen, o
         tournamentMode: formData.tournamentMode,
         hostUid: editTournament ? editTournament.hostUid : user.uid,
         currentPlayers: editTournament ? editTournament.currentPlayers : 0,
-        status: editTournament ? editTournament.status : initialStatus,
-        fundingStatus: editTournament ? (editTournament.fundingStatus || initialFundingStatus) : initialFundingStatus,
+        status: editTournament 
+          ? (editTournament.status === 'pending_funding' ? initialStatus : editTournament.status) 
+          : initialStatus,
+        fundingStatus: editTournament 
+          ? (editTournament.fundingStatus === 'PENDING_FUNDING' || !editTournament.fundingStatus ? initialFundingStatus : editTournament.fundingStatus) 
+          : initialFundingStatus,
         requiredFunding,
-        reservedFunding: editTournament ? (editTournament.reservedFunding || 0) : 0,
+        reservedFunding: requiredFunding,
         stage: editTournament ? editTournament.stage : 'registration',
         updatedAt: serverTimestamp(),
         startTime: Timestamp.fromDate(new Date(formData.startTime)),
@@ -262,6 +267,9 @@ const TournamentCreateModal: React.FC<TournamentCreateModalProps> = ({ isOpen, o
 
       if (editTournament) {
         await updateDoc(doc(db, 'tournaments', editTournament.id), tournamentData);
+        if (isScrim) {
+          await setDoc(doc(db, 'scrims', editTournament.id), tournamentData, { merge: true }).catch(() => {});
+        }
         await setDoc(doc(db, 'tournaments', editTournament.id, 'credentials', 'main'), { roomId, roomPass }, { merge: true });
         showToast('Tournament updated successfully!', 'success');
       } else {
@@ -305,6 +313,15 @@ const TournamentCreateModal: React.FC<TournamentCreateModalProps> = ({ isOpen, o
         });
         if (roomId || roomPass) {
           await setDoc(doc(db, 'tournaments', docRef.id, 'credentials', 'main'), { roomId, roomPass });
+        }
+        if (isScrim) {
+          await setDoc(doc(db, 'scrims', docRef.id), {
+            ...tournamentData,
+            createdAt: serverTimestamp(),
+          }).catch(() => {});
+          if (roomId || roomPass) {
+            await setDoc(doc(db, 'scrims', docRef.id, 'credentials', 'main'), { roomId, roomPass }, { merge: true }).catch(() => {});
+          }
         }
 
         // If funded tournament, attempt atomic activation/fund reservation immediately

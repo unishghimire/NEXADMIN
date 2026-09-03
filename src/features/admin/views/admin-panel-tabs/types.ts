@@ -52,6 +52,7 @@ export type AdminPanelTabProps = Record<string, any> & {
     handleToggleFeatured?: any;
     handleUpdateUserRole?: any;
     handleViewParticipants?: any;
+    handleUnlockTournament?: any;
     isCategoryModalOpen?: any;
     isGameModalOpen?: any;
     isNoticeActive?: any;
