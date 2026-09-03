@@ -1,5 +1,13 @@
-import { db } from '../config/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { db, rtdb } from '../config/firebase';
+import { doc, getDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { ref, onValue } from 'firebase/database';
+
+export interface RoomCredentials {
+    roomId?: string;
+    roomPass?: string;
+    streamUrl?: string;
+    updatedAt?: number | string;
+}
 
 /**
  * Fetches room credentials for a tournament, scrim, or specific group.
@@ -15,18 +23,187 @@ export async function fetchRoomCredentials(
     id: string,
     groupId?: string,
     collectionName: 'tournaments' | 'scrims' = 'tournaments',
-): Promise<{ roomId?: string; roomPass?: string } | null> {
+): Promise<RoomCredentials | null> {
+    if (!id) return null;
     try {
         const credId = groupId ? `group_${groupId}` : 'main';
         const credRef = doc(db, collectionName, id, 'credentials', credId);
         const credSnap = await getDoc(credRef);
 
         if (credSnap.exists()) {
-            return credSnap.data() as { roomId?: string; roomPass?: string };
+            return credSnap.data() as RoomCredentials;
         }
+
+        // Direct parent document fallback
+        const mainSnap = await getDoc(doc(db, collectionName, id));
+        if (mainSnap.exists()) {
+            const d = mainSnap.data() as any;
+            const docRoomId = d.roomId || d.roomDetails?.roomId;
+            const docRoomPass = d.roomPass || d.roomPassword || d.roomDetails?.roomPass || d.roomDetails?.roomPassword;
+            if (docRoomId || docRoomPass) {
+                return {
+                    roomId: docRoomId ? String(docRoomId) : undefined,
+                    roomPass: docRoomPass ? String(docRoomPass) : undefined,
+                    streamUrl: d.streamUrl || d.ytLink || d.roomDetails?.streamUrl,
+                };
+            }
+        }
+
+        // Cross-collection fallback ('scrims' <-> 'tournaments')
+        const altCollection = collectionName === 'tournaments' ? 'scrims' : 'tournaments';
+        const altCredRef = doc(db, altCollection, id, 'credentials', credId);
+        const altCredSnap = await getDoc(altCredRef);
+        if (altCredSnap.exists()) {
+            return altCredSnap.data() as RoomCredentials;
+        }
+
+        const altSnap = await getDoc(doc(db, altCollection, id));
+        if (altSnap.exists()) {
+            const d = altSnap.data() as any;
+            const docRoomId = d.roomId || d.roomDetails?.roomId;
+            const docRoomPass = d.roomPass || d.roomPassword || d.roomDetails?.roomPass || d.roomDetails?.roomPassword;
+            if (docRoomId || docRoomPass) {
+                return {
+                    roomId: docRoomId ? String(docRoomId) : undefined,
+                    roomPass: docRoomPass ? String(docRoomPass) : undefined,
+                    streamUrl: d.streamUrl || d.ytLink || d.roomDetails?.streamUrl,
+                };
+            }
+        }
+
         return null;
     } catch {
-        // ponytail: return null on permission error — UI falls back to tournament-level creds
         return null;
     }
+}
+
+/**
+ * Subscribes in real-time to room credentials with millisecond low-latency live synchronization.
+ * Listens to Realtime Database live_rooms channel (< 30ms) and Firestore credentials subcollection.
+ *
+ * @param id The tournament or scrim ID
+ * @param callback Handler receiving updated credentials or null
+ * @param groupId Optional group ID for per-group credentials
+ * @param collectionName 'tournaments' (default) or 'scrims'
+ * @returns Unsubscribe function to clean up live listeners
+ */
+export function subscribeRoomCredentials(
+    id: string,
+    callback: (credentials: RoomCredentials | null) => void,
+    groupId?: string,
+    collectionName: 'tournaments' | 'scrims' = 'tournaments',
+): () => void {
+    if (!id) {
+        callback(null);
+        return () => {};
+    }
+
+    const credId = groupId ? `group_${groupId}` : 'main';
+    let isUnsubscribed = false;
+    let latestCreds: RoomCredentials | null = null;
+
+    const emitIfChanged = (newCreds: RoomCredentials | null) => {
+        if (isUnsubscribed) return;
+        if (!newCreds && !latestCreds) return;
+        if (
+            newCreds?.roomId === latestCreds?.roomId &&
+            newCreds?.roomPass === latestCreds?.roomPass &&
+            newCreds?.streamUrl === latestCreds?.streamUrl
+        ) {
+            return;
+        }
+        latestCreds = newCreds;
+        callback(newCreds);
+    };
+
+    // Initial fetch fallback
+    fetchRoomCredentials(id, groupId, collectionName).then(initial => {
+        if (!isUnsubscribed && initial) {
+            emitIfChanged(initial);
+        }
+    });
+
+    // 1. High-speed RTDB WebSocket listener
+    let unsubRtdb: (() => void) | null = null;
+    try {
+        if (rtdb) {
+            const rtdbRef = ref(rtdb, `live_rooms/${id}/${credId}`);
+            unsubRtdb = onValue(rtdbRef, (snapshot) => {
+                const val = snapshot.val();
+                if (val && (val.roomId || val.roomPass)) {
+                    emitIfChanged({
+                        roomId: val.roomId ? String(val.roomId) : undefined,
+                        roomPass: val.roomPass ? String(val.roomPass) : undefined,
+                        streamUrl: val.streamUrl ? String(val.streamUrl) : undefined,
+                    });
+                }
+            }, () => {});
+        }
+    } catch {
+        // Fallback gracefully
+    }
+
+    // 2. Firestore real-time onSnapshot listener (authoritative subcollection)
+    let unsubFirestore: Unsubscribe | null = null;
+    try {
+        const credRef = doc(db, collectionName, id, 'credentials', credId);
+        unsubFirestore = onSnapshot(credRef, (snap) => {
+            if (snap.exists()) {
+                const data = snap.data() as RoomCredentials;
+                emitIfChanged(data);
+            }
+        }, () => {});
+    } catch {
+        // Fallback gracefully
+    }
+
+    // 3. Direct document listener for organizers broadcasting directly on scrim/tournament doc
+    let unsubMainDoc: Unsubscribe | null = null;
+    try {
+        const mainRef = doc(db, collectionName, id);
+        unsubMainDoc = onSnapshot(mainRef, (snap) => {
+            if (snap.exists()) {
+                const d = snap.data() as any;
+                const docRoomId = d.roomId || d.roomDetails?.roomId;
+                const docRoomPass = d.roomPass || d.roomPassword || d.roomDetails?.roomPass || d.roomDetails?.roomPassword;
+                const docStream = d.streamUrl || d.ytLink || d.roomDetails?.streamUrl;
+                if (docRoomId || docRoomPass) {
+                    emitIfChanged({
+                        roomId: docRoomId ? String(docRoomId) : undefined,
+                        roomPass: docRoomPass ? String(docRoomPass) : undefined,
+                        streamUrl: docStream ? String(docStream) : undefined,
+                    });
+                }
+            }
+        }, () => {});
+    } catch {}
+
+    // 4. Cross-collection listener ('scrims' <-> 'tournaments')
+    let unsubAltCred: Unsubscribe | null = null;
+    const altCollection = collectionName === 'tournaments' ? 'scrims' : 'tournaments';
+    try {
+        const altCredRef = doc(db, altCollection, id, 'credentials', credId);
+        unsubAltCred = onSnapshot(altCredRef, (snap) => {
+            if (snap.exists()) {
+                const data = snap.data() as RoomCredentials;
+                emitIfChanged(data);
+            }
+        }, () => {});
+    } catch {}
+
+    return () => {
+        isUnsubscribed = true;
+        if (unsubRtdb) {
+            try { unsubRtdb(); } catch {}
+        }
+        if (unsubFirestore) {
+            try { unsubFirestore(); } catch {}
+        }
+        if (unsubMainDoc) {
+            try { unsubMainDoc(); } catch {}
+        }
+        if (unsubAltCred) {
+            try { unsubAltCred(); } catch {}
+        }
+    };
 }
