@@ -1,0 +1,544 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ═══════════════════════════════════════════════════════════════
+    // ADMIN BYPASS — uses Firebase Auth Custom Claims, not hardcoded UID.
+    // To set admin: admin.auth().setCustomUserClaims(uid, { role: 'admin' })
+    // ═══════════════════════════════════════════════════════════════
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GLOBAL HELPERS
+    // ═══════════════════════════════════════════════════════════════
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    // Google accounts are verified by the provider; password accounts must verify email.
+    function isVerified() {
+      return isSignedIn() && (
+        request.auth.token.email_verified == true ||
+        request.auth.token.firebase.sign_in_provider == 'google.com'
+      );
+    }
+    // Role checks — Custom Claims are primary, with doc fallback for smooth onboarding.
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.role == 'admin' ||
+        request.auth.token.email == 'nexplayorg@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+    function isOrganizer() {
+      return isSignedIn() && (
+        isAdmin() ||
+        request.auth.token.role == 'organizer' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'organizer')
+      );
+    }
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    function isTournamentHost(tournamentId) {
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/tournaments/$(tournamentId)) &&
+         (get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.hostUid == request.auth.uid ||
+          (('orgId' in get(/databases/$(database)/documents/tournaments/$(tournamentId)).data) &&
+           get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.orgId == request.auth.uid))) ||
+        (exists(/databases/$(database)/documents/scrims/$(tournamentId)) &&
+         (get(/databases/$(database)/documents/scrims/$(tournamentId)).data.hostUid == request.auth.uid ||
+          (('orgId' in get(/databases/$(database)/documents/scrims/$(tournamentId)).data) &&
+           get(/databases/$(database)/documents/scrims/$(tournamentId)).data.orgId == request.auth.uid)))
+      );
+    }
+    function isTeamOwner(teamId) {
+      return isSignedIn() && teamId is string &&
+             exists(/databases/$(database)/documents/teams/$(teamId)) &&
+             get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == request.auth.uid;
+    }
+
+    // BUG-035: team_members can only be created via an ACCEPTED team invite,
+    // or by the team owner when creating their own initial admin membership.
+    // Prevents a user injecting themselves into any team to game eligibility.
+    function canJoinTeam() {
+      return isVerified() &&
+             isOwner(incoming().userId) &&
+             incoming().teamId is string &&
+             incoming().userId is string &&
+             (
+               (incoming().role == 'admin' && isTeamOwner(incoming().teamId)) ||
+               (incoming().inviteId is string &&
+                exists(/databases/$(database)/documents/team_invites/$(incoming().inviteId)) &&
+                get(/databases/$(database)/documents/team_invites/$(incoming().inviteId)).data.inviteeId == incoming().userId &&
+                get(/databases/$(database)/documents/team_invites/$(incoming().inviteId)).data.teamId == incoming().teamId &&
+                get(/databases/$(database)/documents/team_invites/$(incoming().inviteId)).data.status == 'accepted')
+             );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // VALIDATION BLUEPRINTS
+    // ═══════════════════════════════════════════════════════════════
+    function isValidUserProfile(data) {
+      return data.uid == request.auth.uid &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 30 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.role in ['player', 'organizer', 'admin'];
+    }
+
+    // Validates the minimum required fields for a tournament document.
+    // Permissive on status to support all lifecycle states the app uses.
+    function isValidTournament(data) {
+      return data.title is string && data.title.size() >= 5 && data.title.size() <= 100 &&
+            data.game is string && data.game.size() >= 2 && data.game.size() <= 50 &&
+            data.prizePool is number && data.prizePool >= 0 &&
+            // 'open' is the lifecycle status used by practice scrims (stored in the tournaments collection)
+            data.status in ['draft', 'published', 'upcoming', 'live', 'paused', 'completed', 'cancelled', 'open'] &&
+             isValidId(data.hostUid) &&
+             !data.keys().hasAny(['roomId', 'roomPass']);
+    }
+
+    // Validates a transaction record on creation — prevents amount/type manipulation
+    function isValidTransaction(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.amount is number &&
+             data.type in ['deposit', 'withdrawal'] &&
+             data.status == 'pending' &&
+             data.method is string && data.method.size() <= 50;
+    }
+
+    // Validates users_public fields — prevents injection of arbitrary metadata
+    function isValidPublicProfile(data) {
+      return data.keys().hasOnly([
+        'uid', 'username', 'inGameId', 'inGameName', 'role',
+        'profilePicUrl', 'bannerUrl', 'teamName', 'teamId', 'orgName',
+        'skills', 'status', 'customActivity', 'totalEarnings', 'updatedAt',
+        // PublicProfile schema fields (firebase-blueprint.json) — present on
+        // existing docs, so they must be allowed or every update is denied.
+        'points', 'wins', 'tournamentsPlayed', 'winRate', 'rankChange',
+        'isVerified', 'isChampion', 'rank'
+      ]);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SITE SETTINGS — public read, admin write
+    // ═══════════════════════════════════════════════════════════════
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // USERS — private profile, strict field-level update controls
+    // ═══════════════════════════════════════════════════════════════
+    match /users/{userId} {
+      allow get:  if (isOwner(userId) || isAdmin()) && isValidId(userId);
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() && isValidId(userId) &&
+                       isOwner(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().role == 'player' &&
+                       incoming().balance == 0 &&
+                       incoming().totalEarnings == 0;
+
+      // Players can update their own profile fields only — financial and role fields are locked
+      allow update: if isValidId(userId) && (
+        (isOwner(userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'username', 'bio', 'profilePicUrl', 'bannerUrl', 'phone',
+            'contactInfo', 'inGameId', 'inGameName', 'teamName', 'teamId',
+            'whatsapp', 'discord', 'youtube', 'status', 'customActivity',
+            'lastActive', 'updatedAt', 'skills', 'orgName', 'email',
+            'orgStatus', 'resultPresets',
+            'youtubeUrl', 'twitchUrl',
+            'refereeName', 'refereeEnabled', 'casterName', 'casterEnabled'
+          ]) &&
+          incoming().uid == existing().uid &&
+          incoming().role == existing().role &&
+          incoming().balance == existing().balance &&
+          incoming().totalEarnings == existing().totalEarnings
+        ) ||
+        (existing().teamId is string && isTeamOwner(existing().teamId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['teamName', 'teamId', 'updatedAt']) &&
+          incoming().teamName == '' && incoming().teamId == '') ||
+        isAdmin()
+      );
+    }
+
+    match /users_public/{userId} {
+      allow get:    if true && isValidId(userId);
+      allow list:   if true;
+      allow create: if isSignedIn() && isValidId(userId) && isOwner(userId) &&
+                       incoming().uid == userId && incoming().role == 'player' &&
+                       incoming().totalEarnings == 0 && isValidPublicProfile(incoming());
+      allow update: if isValidId(userId) && isValidPublicProfile(incoming()) && (
+                       (isOwner(userId) && incoming().uid == existing().uid &&
+                        incoming().role == existing().role &&
+                        incoming().diff(existing()).affectedKeys().hasOnly([
+                          'username', 'inGameId', 'inGameName', 'profilePicUrl',
+                          'bannerUrl', 'teamName', 'teamId', 'orgName', 'skills',
+                          'status', 'customActivity', 'updatedAt'
+                        ])) ||
+                       (existing().teamId is string && isTeamOwner(existing().teamId) &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['teamName', 'teamId', 'updatedAt']) &&
+                        incoming().teamName == '' && incoming().teamId == '') ||
+                       isAdmin());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // TOURNAMENTS — organizer create/manage, public read
+    // ═══════════════════════════════════════════════════════════════
+    match /tournaments/{tournamentId} {
+      allow get:  if isValidId(tournamentId);
+      allow list: if true;
+
+      allow create: if isOrganizer() &&
+                       isValidId(tournamentId) &&
+                       isValidTournament(incoming()) &&
+                       incoming().hostUid == request.auth.uid;
+
+      // Organizer can update any field on their own tournament.
+      // Field-level restriction removed — organizers need to update groups,
+      // bracketMatches, roomId, roomPass, winners, etc. Admin has full access.
+      // Security: completed/cancelled tournaments cannot be re-opened by organizers.
+      allow update: if isValidId(tournamentId) && (
+        isAdmin() ||
+        (isOrganizer() &&
+          existing().hostUid == request.auth.uid &&
+          isValidTournament(incoming()) &&
+          incoming().hostUid == existing().hostUid &&
+          !(existing().status in ['completed', 'cancelled'] &&
+            incoming().status in ['upcoming', 'published', 'live', 'paused']))
+      );
+
+      allow delete: if isValidId(tournamentId) && (
+        isAdmin() ||
+        (isOrganizer() && (existing().hostUid == request.auth.uid || (('orgId' in existing()) && existing().orgId == request.auth.uid)))
+      );
+    }
+
+    // Subcollection groups (legacy path — current app stores groups inside tournament doc)
+    match /tournaments/{tournamentId}/groups/{groupId} {
+      allow read:  if true;
+      allow write: if isAdmin() || isTournamentHost(tournamentId);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ROOM CREDENTIALS — host + joined participants only
+    // Stores roomId/roomPass per tournament and per group.
+    // Public tournament reads do NOT include these fields.
+    // ═══════════════════════════════════════════════════════════════
+    function isTournamentParticipant(tournamentId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/participants/$(tournamentId + '_' + request.auth.uid));
+    }
+    match /tournaments/{tournamentId}/credentials/{credId} {
+      allow get: if isValidId(tournamentId) && (
+        isAdmin() ||
+        isTournamentHost(tournamentId) ||
+        isTournamentParticipant(tournamentId)
+      );
+      allow list: if false; // ponytail: no listing — always fetch by known doc ID
+      allow write: if isAdmin() || isTournamentHost(tournamentId);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PARTICIPANTS — players self-register, organizer can approve.
+    // Reads scoped (BUG-037): a participant doc is only readable by the
+    // registered player, the tournament host, or an admin. LIST stays
+    // signed-in so host/admin roster queries and self/team join-status
+    // queries work; list results are filtered per-doc by the get rule.
+    // ═══════════════════════════════════════════════════════════════
+    match /participants/{participantId} {
+      allow get: if isSignedIn() && (
+        isAdmin() ||
+        existing().userId == request.auth.uid ||
+        isTournamentHost(existing().tournamentId)
+      );
+      allow list: if isSignedIn();
+
+      // Client-side creation blocked — all joins go through /api/wallet/join-tournament
+      // (Admin SDK bypasses rules, enforces atomic balance/overbooking/duplicate checks)
+      allow create: if false;
+
+      // Organizer/admin can update status + check-in fields (approve/reject/check-in)
+      // and per-participant tournament stats/moderation fields (result upload, roster lock,
+      // strikes/warnings, bans). Players can check themselves in (toggle checkedIn only).
+      // Player can delete their own registration (leave tournament).
+      allow update: if isAdmin() ||
+                       (isOrganizer() && isTournamentHost(existing().tournamentId) &&
+                        incoming().diff(existing()).affectedKeys().hasOnly([
+                          'status', 'checkedIn', 'checkedInAt',
+                          'totalKills', 'totalPoints', 'matchesPlayed',
+                          'rosterLocked', 'strikes', 'lastWarning', 'lastWarningAt', 'banned'
+                        ])) ||
+                       (isVerified() && existing().userId == request.auth.uid &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['checkedIn', 'checkedInAt']));
+
+      allow delete: if isAdmin() ||
+                       (isVerified() && (
+                         existing().userId == request.auth.uid ||
+                         isTournamentHost(existing().tournamentId)
+                       ));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SCRIMS
+    // ═══════════════════════════════════════════════════════════════
+    // AUD-013: scrim credentials must NOT be stored in the public scrim doc.
+    // Credentials live in the protected credentials subcollection below.
+    match /scrims/{scrimId} {
+      allow read:   if true;
+      allow create: if isOrganizer() && (
+        incoming().hostUid == request.auth.uid ||
+        incoming().orgId == request.auth.uid ||
+        isAdmin()
+      ) && !(('roomId' in incoming()) || ('roomPassword' in incoming()) || ('roomPass' in incoming()));
+      allow update: if isAdmin() || ((isOrganizer() && (existing().hostUid == request.auth.uid || existing().orgId == request.auth.uid))
+        // Reject any update that tries to write credential fields to the public doc
+        && !(('roomId' in incoming()) || ('roomPassword' in incoming()) || ('roomPass' in incoming())));
+      allow delete: if isAdmin() || (isOrganizer() && (existing().hostUid == request.auth.uid || existing().orgId == request.auth.uid));
+    }
+
+    // AUD-013: protected credentials subcollection for scrims (same pattern as tournaments)
+    function isScrimParticipant(scrimId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/participants/$(scrimId + '_' + request.auth.uid));
+    }
+    match /scrims/{scrimId}/credentials/{credId} {
+      allow get: if isSignedIn() && isValidId(scrimId) && (
+        isAdmin() ||
+        isScrimParticipant(scrimId) ||
+        (exists(/databases/$(database)/documents/scrims/$(scrimId)) &&
+         (get(/databases/$(database)/documents/scrims/$(scrimId)).data.hostUid == request.auth.uid ||
+          get(/databases/$(database)/documents/scrims/$(scrimId)).data.orgId == request.auth.uid))
+      );
+      allow list: if false; // ponytail: no listing — always fetch by known doc ID
+      allow write: if isAdmin() ||
+        (isOrganizer() && exists(/databases/$(database)/documents/scrims/$(scrimId)) &&
+         (get(/databases/$(database)/documents/scrims/$(scrimId)).data.hostUid == request.auth.uid ||
+          get(/databases/$(database)/documents/scrims/$(scrimId)).data.orgId == request.auth.uid));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RESULTS
+    // ═══════════════════════════════════════════════════════════════
+    match /results/{resultId} {
+      allow read:   if true;
+      allow create: if isAdmin() ||
+                       (isOrganizer() &&
+                        isValidId(resultId) &&
+                        exists(/databases/$(database)/documents/tournaments/$(incoming().tournamentId)) &&
+                        get(/databases/$(database)/documents/tournaments/$(incoming().tournamentId)).data.hostUid == request.auth.uid);
+      allow update: if isAdmin() ||
+                       (isOrganizer() &&
+                        exists(/databases/$(database)/documents/tournaments/$(existing().tournamentId)) &&
+                        get(/databases/$(database)/documents/tournaments/$(existing().tournamentId)).data.hostUid == request.auth.uid);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // NOTIFICATIONS — users read own; verified users can notify each other
+    // (team invites, follow alerts, team-disband notices). Update/delete remain
+    // restricted to the recipient or an admin to prevent feed tampering.
+    // ═══════════════════════════════════════════════════════════════
+    match /notifications/{notificationId} {
+      allow get:    if isOwner(existing().userId) && isValidId(notificationId);
+      allow list:   if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && incoming().userId is string;
+      allow update: if isOwner(existing().userId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isOwner(existing().userId) || isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // TRANSACTIONS — server-only writes via /api/wallet/* and the admin
+    // money endpoints (/api/admin/transactions/*, /api/admin/balance/adjust).
+    // Clients can only read their own transactions (BUG-031).
+    // ═══════════════════════════════════════════════════════════════
+    match /transactions/{transactionId} {
+      allow get:    if (isOwner(existing().userId) || isAdmin()) && isValidId(transactionId);
+      allow list:   if isSignedIn() && resource.data.userId == request.auth.uid;
+      // All creates/updates/deletes are server-side — Admin SDK bypasses rules
+      allow create: if false;
+      allow update, delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // TEAMS
+    // ═══════════════════════════════════════════════════════════════
+    match /teams/{teamId} {
+      allow read:   if true;
+      allow create: if isVerified() && incoming().ownerId == request.auth.uid;
+      allow update: if (isOwner(existing().ownerId) && incoming().ownerId == existing().ownerId) || isAdmin();
+      allow delete: if isOwner(existing().ownerId) || isAdmin();
+    }
+
+    match /team_members/{memberId} {
+      allow read:   if true;
+      // Create requires an accepted team invite, or owner self-join at team creation (BUG-035)
+      allow create: if canJoinTeam();
+      allow delete: if isAdmin() || isOwner(existing().userId) || isTeamOwner(existing().teamId);
+    }
+
+    match /team_invites/{inviteId} {
+      allow read:   if isSignedIn() && (
+                       isOwner(existing().inviteeId) ||
+                       isOwner(existing().inviterId) ||
+                       isAdmin()
+                    );
+      allow create: if isVerified() && incoming().inviterId == request.auth.uid;
+      allow update: if (isOwner(existing().inviteeId) ||
+                        isTeamOwner(existing().teamId) ||
+                        isAdmin()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isSignedIn() && (
+                       isOwner(existing().inviteeId) ||
+                       isOwner(existing().inviterId) ||
+                       isTeamOwner(existing().teamId) ||
+                       isAdmin()
+                    );
+    }
+
+    match /team_activity/{activityId} {
+      // Team activity logs — require auth (client filters by teamId).
+      // Create: the acting user can only log their own actions.
+      // Update/delete: the acting user who owns the entry, the team owner, or an admin.
+      allow read:  if isSignedIn();
+      allow create: if isVerified() && isOwner(incoming().userId);
+      allow update, delete: if isAdmin() || isOwner(existing().userId) || isTeamOwner(existing().teamId);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SOCIAL / FOLLOWS
+    // ═══════════════════════════════════════════════════════════════
+    match /follows/{followId} {
+      allow read:   if true;
+      allow create: if isVerified() && incoming().followerId == request.auth.uid;
+      allow delete: if isOwner(existing().followerId);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ORG POSTS
+    // ═══════════════════════════════════════════════════════════════
+    match /org_posts/{postId} {
+      allow read:          if true;
+      allow create:        if isOrganizer() && incoming().orgId == request.auth.uid;
+      allow update, delete: if isOwner(existing().orgId) || isAdmin();
+    }
+
+    match /orgApplications/{appId} {
+      allow read:   if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+      allow create: if isVerified() && incoming().userId == request.auth.uid;
+      allow update: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // DISPUTES — signed-in users can file; the tournament host or an admin can resolve.
+    // ═══════════════════════════════════════════════════════════════
+    match /disputes/{disputeId} {
+      allow read:   if isOwner(existing().userId) || isAdmin() ||
+                       isTournamentHost(existing().tournamentId);
+      allow create: if isVerified() && incoming().userId == request.auth.uid;
+      allow update: if isAdmin() ||
+                       isTournamentHost(existing().tournamentId) ||
+                       (isOwner(existing().userId) &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['description', 'attachments', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // MATCH HISTORY & EARNINGS
+    // ═══════════════════════════════════════════════════════════════
+    match /match_history/{matchId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    match /tournamentEarnings/{earningId} {
+      // Financial data — org owner can read their own earnings, admins see all
+      allow get:  if isAdmin() || (isSignedIn() && existing().orgId == request.auth.uid);
+      // Allow organizers to list their own earnings (filtered by orgId in client query)
+      allow list: if isAdmin() || (isSignedIn() && resource.data.orgId == request.auth.uid);
+      // Writes are server-only — created by /api/wallet/distribute-prizes and
+      // released by /api/admin/earnings/release (BUG-031). Admin SDK bypasses rules.
+      allow create, update, delete: if false;
+    }
+
+    match /tournament_funding/{fundingId} {
+      // Financial reserve record — organizer can read their own, admin reads all
+      allow get:  if isAdmin() || (isSignedIn() && existing().organizationId == request.auth.uid);
+      allow list: if isAdmin() || (isSignedIn() && resource.data.organizationId == request.auth.uid);
+      // Writes are strictly server-side (Admin SDK bypasses rules)
+      allow create, update, delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // DISCORD LOGS — server-side only (no client reads needed)
+    // ═══════════════════════════════════════════════════════════════
+    match /discordLogs/{logId} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PLATFORM ASSETS — admin managed, publicly readable
+    // ═══════════════════════════════════════════════════════════════
+    match /games/{gameId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    match /slides/{slideId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    match /paymentMethods/{methodId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    match /paymentCategories/{catId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    match /promocodes/{promoId} {
+      allow get:  if isVerified();
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // MEDIA — catalog records are created by the authenticated server after upload.
+    // Client creation would allow a caller to forge a provider publicId and later
+    // ask the server to delete an asset it does not own.
+    // ═══════════════════════════════════════════════════════════════
+    match /media/{mediaId} {
+      allow read:   if true;
+      allow create: if false;
+      allow delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ADMIN-ONLY AUDIT TRAILS
+    // ═══════════════════════════════════════════════════════════════
+    match /activityLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /audit_reports/{reportId} {
+      allow get, list: if isAdmin() || (isSignedIn() && existing().createdBy == request.auth.uid);
+      allow create:    if isSignedIn();
+      allow update:    if isAdmin() || (isSignedIn() && existing().createdBy == request.auth.uid);
+      allow delete:    if isAdmin();
+    }
+  }
+}
