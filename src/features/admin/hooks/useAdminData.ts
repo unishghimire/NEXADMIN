@@ -81,6 +81,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
 
     // Settings State
     const [minWithdrawal, setMinWithdrawal] = useState('');
+    const [platformCommission, setPlatformCommission] = useState('15');
     const [supportEmail, setSupportEmail] = useState('');
     const [supportPhone, setSupportPhone] = useState('');
     const [notice, setNotice] = useState('');
@@ -350,6 +351,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
                 const data = results[13].value.data() as SiteSettings;
                 setSiteSettings(data);
                 setMinWithdrawal(data.minWithdrawal?.toString() || '');
+                setPlatformCommission(data.platformCommission !== undefined ? data.platformCommission.toString() : '15');
                 setSupportEmail(data.supportEmail || '');
                 setSupportPhone(data.supportPhone || '');
                 setNotice(data.notice || '');
@@ -1168,6 +1170,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         try {
             const settingsData = {
                 minWithdrawal: parseFloat(minWithdrawal),
+                platformCommission: parseFloat(platformCommission) || 15,
                 supportEmail,
                 supportPhone,
                 notice,
@@ -1506,6 +1509,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             mediaLoading,
             mediaSearch,
             minWithdrawal,
+            platformCommission,
             directUploadUrl,
             notice,
             openEditGame,
@@ -1553,6 +1557,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             setMediaFilter,
             setMediaSearch,
             setMinWithdrawal,
+            setPlatformCommission,
             setDirectUploadUrl,
             setNotice,
             setOrgDiscord,

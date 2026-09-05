@@ -501,6 +501,7 @@ export interface DiscordWebhooksConfig {
 
 export interface SiteSettings {
     minWithdrawal: number;
+    platformCommission?: number;
     supportEmail: string;
     supportPhone: string;
     notice: string;

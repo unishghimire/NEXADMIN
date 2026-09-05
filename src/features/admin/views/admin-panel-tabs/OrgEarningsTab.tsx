@@ -4,7 +4,7 @@ import { AdminPanelTabProps } from './types';
 import { TournamentEarning } from '../../../../shared/types/types';
 
 export const OrgEarningsTab: React.FC<AdminPanelTabProps> = (props) => {
-    const { formatCurrency, formatDate, handleReleaseEarnings, tournamentEarnings } = props;
+    const { formatCurrency, formatDate, handleReleaseEarnings, tournamentEarnings, siteSettings } = props;
     const [releasingId, setReleasingId] = useState<string | null>(null);
 
     const earningsList: TournamentEarning[] = tournamentEarnings || [];
@@ -14,13 +14,16 @@ export const OrgEarningsTab: React.FC<AdminPanelTabProps> = (props) => {
     const pendingOrgShare = earningsList.filter(e => e.status === 'pending').reduce((acc, e) => acc + (Number(e.orgShare) || 0), 0);
     const pendingCount = earningsList.filter(e => e.status === 'pending').length;
 
+    const commissionPercent = siteSettings?.platformCommission ?? 15;
+    const orgSharePercent = 100 - commissionPercent;
+
     return (
         <div className="space-y-6">
             {/* Top Financial KPI Metrics */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-card p-5 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/20 to-transparent">
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Platform Commission (15%)</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Platform Commission ({commissionPercent}%)</span>
                         <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
                             <Percent className="w-5 h-5" />
                         </div>
@@ -33,7 +36,7 @@ export const OrgEarningsTab: React.FC<AdminPanelTabProps> = (props) => {
 
                 <div className="bg-card p-5 rounded-2xl border border-brand-500/20 bg-gradient-to-br from-brand-950/20 to-transparent">
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Org Share (85%)</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Org Share ({orgSharePercent}%)</span>
                         <div className="p-2 rounded-xl bg-brand-500/10 text-brand-400">
                             <DollarSign className="w-5 h-5" />
                         </div>
@@ -80,7 +83,7 @@ export const OrgEarningsTab: React.FC<AdminPanelTabProps> = (props) => {
                         </h2>
                     </div>
                     <div className="text-xs text-gray-400 font-mono">
-                        Revenue Split: <span className="text-brand-400 font-bold">85% Org</span> / <span className="text-emerald-400 font-bold">15% Platform</span>
+                        Revenue Split: <span className="text-brand-400 font-bold">{orgSharePercent}% Org</span> / <span className="text-emerald-400 font-bold">{commissionPercent}% Platform</span>
                     </div>
                 </div>
 
@@ -92,8 +95,8 @@ export const OrgEarningsTab: React.FC<AdminPanelTabProps> = (props) => {
                                 <th className="p-4 font-medium">Event</th>
                                 <th className="p-4 font-medium">Organizer</th>
                                 <th className="p-4 font-medium">Prize Pool</th>
-                                <th className="p-4 font-medium">Platform Cut (15%)</th>
-                                <th className="p-4 font-medium">Org Share (85%)</th>
+                                <th className="p-4 font-medium">Platform Cut ({commissionPercent}%)</th>
+                                <th className="p-4 font-medium">Org Share ({orgSharePercent}%)</th>
                                 <th className="p-4 font-medium">Status</th>
                                 <th className="p-4 font-medium text-right">Actions</th>
                             </tr>
