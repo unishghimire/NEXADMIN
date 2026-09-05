@@ -10,7 +10,6 @@ import {
     Phone,
     Mail,
     Save,
-    CheckCircle2,
     Sliders,
     Layers,
     Sparkles,
@@ -149,21 +148,53 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
     const activeSectionData = sections.find(s => s.id === activeSection) || sections[0];
     const ActiveIcon = activeSectionData.icon;
 
-    const getTopSaveLabel = () => {
-        if (savingSection) return 'Saving...';
+    const getMainSaveConfig = () => {
+        const isCurrentlySaving = savingSection !== null;
         switch (activeSection) {
-            case 'financial': return 'Save Financial';
-            case 'platform': return 'Save Platform';
-            case 'organizer': return 'Save Organizer';
-            case 'support': return 'Save Support';
-            case 'discord': return 'Save Discord';
-            default: return 'Save All Settings';
+            case 'financial':
+                return {
+                    label: isCurrentlySaving ? 'Saving Financial...' : 'Save Financial Settings',
+                    color: 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/25',
+                    targetSection: 'financial' as const
+                };
+            case 'platform':
+                return {
+                    label: isCurrentlySaving ? 'Saving Platform...' : 'Save Platform & Notices',
+                    color: 'bg-red-600 hover:bg-red-500 shadow-red-600/25',
+                    targetSection: 'platform' as const
+                };
+            case 'organizer':
+                return {
+                    label: isCurrentlySaving ? 'Saving Organizer...' : 'Save Organizer Settings',
+                    color: 'bg-brand-600 hover:bg-brand-500 shadow-brand-600/25',
+                    targetSection: 'organizer' as const
+                };
+            case 'support':
+                return {
+                    label: isCurrentlySaving ? 'Saving Support...' : 'Save Support Info',
+                    color: 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/25',
+                    targetSection: 'support' as const
+                };
+            case 'discord':
+                return {
+                    label: isCurrentlySaving ? 'Saving Webhooks...' : 'Save Discord Webhooks',
+                    color: 'bg-[#5865F2] hover:bg-[#4752c4] shadow-[#5865F2]/25',
+                    targetSection: 'discord' as const
+                };
+            default:
+                return {
+                    label: isCurrentlySaving ? 'Saving All...' : 'Save All Settings',
+                    color: 'bg-brand-600 hover:bg-brand-500 shadow-brand-600/25',
+                    targetSection: 'all' as const
+                };
         }
     };
 
+    const mainSave = getMainSaveConfig();
+
     return (
         <div className="space-y-8 animate-fade-in">
-            {/* Top Control Bar with Dropdown Navigator & Dedicated Save Button */}
+            {/* Top Control Bar with Dropdown Navigator & THE Single Main Save Button */}
             <div className="bg-card p-5 sm:p-7 rounded-2xl border border-gray-800 shadow-xl space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-5">
                     <div className="flex items-center gap-3.5">
@@ -175,19 +206,20 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
                                 Site Configuration
                             </h2>
                             <p className="text-xs text-gray-400 font-medium mt-0.5">
-                                Select a category below to configure platform fees, notices, rules, and webhooks.
+                                Select a category below and save dedicated settings using the main save button.
                             </p>
                         </div>
                     </div>
 
+                    {/* The ONLY Main Save Button on the Page */}
                     <button
                         type="button"
-                        onClick={() => onSaveSection(activeSection)}
+                        onClick={() => onSaveSection(mainSave.targetSection)}
                         disabled={savingSection !== null}
-                        className="flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-7 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg shadow-brand-600/25 cursor-pointer shrink-0"
+                        className={`w-full sm:w-auto flex items-center justify-center gap-2.5 text-white px-7 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg disabled:opacity-50 cursor-pointer shrink-0 ${mainSave.color}`}
                     >
                         <Save className="w-4 h-4" />
-                        <span>{getTopSaveLabel()}</span>
+                        <span>{mainSave.label}</span>
                     </button>
                 </div>
 
@@ -432,23 +464,6 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
                             </div>
                         </div>
                     </div>
-
-                    {/* Dedicated Section Save Option */}
-                    <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
-                        <div className="text-xs text-gray-400 font-medium hidden sm:flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Saves Platform Commission % and Minimum Withdrawal limit</span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => onSaveSection('financial')}
-                            disabled={savingSection === 'financial'}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-lg shadow-emerald-600/20 cursor-pointer ml-auto"
-                        >
-                            <Save className="w-4 h-4" />
-                            <span>{savingSection === 'financial' ? 'Saving...' : 'Save Financial Settings'}</span>
-                        </button>
-                    </div>
                 </div>
             )}
 
@@ -544,23 +559,6 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
                             )}
                         </div>
                     </div>
-
-                    {/* Dedicated Section Save Option */}
-                    <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
-                        <div className="text-xs text-gray-400 font-medium hidden sm:flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-red-400" />
-                            <span>Saves Maintenance Mode state and Site-wide Notice broadcast</span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => onSaveSection('platform')}
-                            disabled={savingSection === 'platform'}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-lg shadow-red-600/20 cursor-pointer ml-auto"
-                        >
-                            <Save className="w-4 h-4" />
-                            <span>{savingSection === 'platform' ? 'Saving...' : 'Save Platform & Notices'}</span>
-                        </button>
-                    </div>
                 </div>
             )}
 
@@ -627,23 +625,6 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
                             </p>
                         </div>
                     </div>
-
-                    {/* Dedicated Section Save Option */}
-                    <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
-                        <div className="text-xs text-gray-400 font-medium hidden sm:flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-brand-400" />
-                            <span>Saves Organizer Application toggle state & requirement guidelines</span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => onSaveSection('organizer')}
-                            disabled={savingSection === 'organizer'}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-lg shadow-brand-600/20 cursor-pointer ml-auto"
-                        >
-                            <Save className="w-4 h-4" />
-                            <span>{savingSection === 'organizer' ? 'Saving...' : 'Save Organizer Settings'}</span>
-                        </button>
-                    </div>
                 </div>
             )}
 
@@ -701,23 +682,6 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
                             </p>
                         </div>
                     </div>
-
-                    {/* Dedicated Section Save Option */}
-                    <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
-                        <div className="text-xs text-gray-400 font-medium hidden sm:flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
-                            <span>Saves Official Support Email and Phone Hotline</span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => onSaveSection('support')}
-                            disabled={savingSection === 'support'}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-lg shadow-blue-600/20 cursor-pointer ml-auto"
-                        >
-                            <Save className="w-4 h-4" />
-                            <span>{savingSection === 'support' ? 'Saving...' : 'Save Support Info'}</span>
-                        </button>
-                    </div>
                 </div>
             )}
 
@@ -743,53 +707,8 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
                         setDiscordWebhooks={props.setDiscordWebhooks}
                         showToast={props.showToast}
                     />
-
-                    {/* Dedicated Section Save Option */}
-                    <div className="pt-4 border-t border-gray-800 flex items-center justify-between">
-                        <div className="text-xs text-gray-400 font-medium hidden sm:flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-[#5865F2]" />
-                            <span>Saves Tournament & Scrims Discord multi-webhook configurations</span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => onSaveSection('discord')}
-                            disabled={savingSection === 'discord'}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752c4] disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-lg shadow-[#5865F2]/20 cursor-pointer ml-auto"
-                        >
-                            <Save className="w-4 h-4" />
-                            <span>{savingSection === 'discord' ? 'Saving...' : 'Save Discord Webhooks'}</span>
-                        </button>
-                    </div>
                 </div>
             )}
-
-            {/* Bottom Global Save Action Bar */}
-            <div className="bg-card p-5 rounded-2xl border border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
-                <div className="text-xs text-gray-400 font-medium flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>You can save each section individually above, or save all settings at once here.</span>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        type="button"
-                        onClick={() => onSaveSection(activeSection)}
-                        disabled={savingSection !== null}
-                        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-surface hover:bg-gray-800 border border-gray-700 text-gray-200 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
-                    >
-                        <Save className="w-4 h-4" />
-                        <span>{getTopSaveLabel()}</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onSaveSection('all')}
-                        disabled={savingSection !== null}
-                        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg shadow-brand-600/25 cursor-pointer"
-                    >
-                        <Save className="w-4 h-4" />
-                        <span>{savingSection === 'all' ? 'Saving All...' : 'Save All Settings'}</span>
-                    </button>
-                </div>
-            </div>
         </div>
     );
 };
