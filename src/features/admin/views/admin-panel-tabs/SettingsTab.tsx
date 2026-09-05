@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     Users,
     Settings,
@@ -14,9 +14,8 @@ import {
     Sliders,
     Layers,
     Sparkles,
-    Eye,
-    HelpCircle,
-    ArrowRight
+    ChevronDown,
+    Check
 } from 'lucide-react';
 
 import { AdminPanelTabProps } from './types';
@@ -50,7 +49,20 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
     } = props;
 
     const [activeSection, setActiveSection] = useState<SettingsSection>('financial');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const onSave = async () => {
         if (!handleSaveSettings) return;
@@ -70,20 +82,62 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
     const exampleOrgNet = exampleProfit - examplePlatformCut;
 
     const sections = [
-        { id: 'financial' as const, label: 'Financial & Commission', icon: DollarSign, badge: `${commissionNum}% Cut` },
-        { id: 'platform' as const, label: 'Platform & Maintenance', icon: ShieldAlert, badge: maintenanceMode ? 'MAINTENANCE' : undefined },
-        { id: 'organizer' as const, label: 'Organizer Portal', icon: Users, badge: siteSettings?.isOrgFormOpen ?? true ? 'Open' : 'Closed' },
-        { id: 'support' as const, label: 'Support & Contacts', icon: Mail },
-        { id: 'discord' as const, label: 'Discord Webhooks', icon: Megaphone },
-        { id: 'all' as const, label: 'All Settings', icon: Layers }
+        {
+            id: 'financial' as const,
+            label: 'Financial & Commission',
+            desc: 'Platform fee %, minimum withdrawal limit, and revenue split',
+            icon: DollarSign,
+            color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+            badge: `${commissionNum}% Platform Cut`
+        },
+        {
+            id: 'platform' as const,
+            label: 'Platform & Maintenance',
+            desc: 'Maintenance mode toggle and site-wide broadcast notice banner',
+            icon: ShieldAlert,
+            color: 'text-red-400 bg-red-500/10 border-red-500/20',
+            badge: maintenanceMode ? 'MAINTENANCE ACTIVE' : undefined
+        },
+        {
+            id: 'organizer' as const,
+            label: 'Organizer Portal',
+            desc: 'Host verification application status and form guidelines',
+            icon: Users,
+            color: 'text-brand-400 bg-brand-500/10 border-brand-500/20',
+            badge: siteSettings?.isOrgFormOpen ?? true ? 'Applications Open' : 'Applications Closed'
+        },
+        {
+            id: 'support' as const,
+            label: 'Support & Contacts',
+            desc: 'Official support email and phone/WhatsApp escalation channel',
+            icon: Mail,
+            color: 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+        },
+        {
+            id: 'discord' as const,
+            label: 'Discord Multi-Webhooks',
+            desc: 'Tournament & Scrim automated announcements, results, and test pings',
+            icon: Megaphone,
+            color: 'text-[#5865F2] bg-[#5865F2]/10 border-[#5865F2]/20'
+        },
+        {
+            id: 'all' as const,
+            label: 'All Settings (Consolidated)',
+            desc: 'View and manage all settings stacked together on one page',
+            icon: Layers,
+            color: 'text-gray-400 bg-gray-500/10 border-gray-500/20'
+        }
     ];
+
+    const activeSectionData = sections.find(s => s.id === activeSection) || sections[0];
+    const ActiveIcon = activeSectionData.icon;
 
     return (
         <div className="space-y-8 animate-fade-in">
-            {/* Top Control Bar with Sub-Navigation & Save Action */}
-            <div className="bg-card p-4 sm:p-6 rounded-2xl border border-gray-800 shadow-xl space-y-6">
+            {/* Top Control Bar with Dropdown Navigator & Save Button */}
+            <div className="bg-card p-5 sm:p-7 rounded-2xl border border-gray-800 shadow-xl space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-5">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3.5">
                         <div className="p-3 bg-brand-500/10 text-brand-400 rounded-2xl border border-brand-500/20">
                             <Settings className="w-6 h-6" />
                         </div>
@@ -92,7 +146,7 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
                                 Site Configuration
                             </h2>
                             <p className="text-xs text-gray-400 font-medium mt-0.5">
-                                Configure platform fees, system notices, organizer rules, and integrations.
+                                Select a category below to configure platform fees, notices, rules, and webhooks.
                             </p>
                         </div>
                     </div>
@@ -108,38 +162,107 @@ export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
                     </button>
                 </div>
 
-                {/* Sub-Navigation Category Pills */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-800">
-                    {sections.map(sec => {
-                        const Icon = sec.icon;
-                        const isSelected = activeSection === sec.id;
-                        return (
-                            <button
-                                key={sec.id}
-                                type="button"
-                                onClick={() => setActiveSection(sec.id)}
-                                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition whitespace-nowrap cursor-pointer border ${
-                                    isSelected
-                                        ? 'bg-brand-500 text-white border-brand-400 shadow-md shadow-brand-500/20'
-                                        : 'bg-dark/80 text-gray-400 border-gray-800 hover:border-gray-700 hover:text-white'
-                                }`}
-                            >
-                                <Icon className="w-4 h-4" />
-                                <span>{sec.label}</span>
-                                {sec.badge && (
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${
-                                        sec.badge === 'MAINTENANCE'
-                                            ? 'bg-red-500 text-white animate-pulse'
-                                            : isSelected
-                                                ? 'bg-black/30 text-white'
-                                                : 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
-                                    }`}>
-                                        {sec.badge}
+                {/* Dropdown Category Selector (Mobile & Desktop Friendly) */}
+                <div className="relative" ref={dropdownRef}>
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-2 flex items-center justify-between block">
+                        <span>Settings Category</span>
+                        <span className="text-[10px] text-brand-400 font-bold">Tap to switch view</span>
+                    </label>
+
+                    {/* Trigger Button */}
+                    <button
+                        type="button"
+                        onClick={() => setIsDropdownOpen(prev => !prev)}
+                        className="w-full flex items-center justify-between bg-dark/95 hover:bg-dark border border-gray-700 hover:border-brand-500/60 p-4 rounded-2xl transition cursor-pointer shadow-lg group text-left"
+                    >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                            <div className={`p-2.5 rounded-xl border shrink-0 ${activeSectionData.color}`}>
+                                <ActiveIcon className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-white font-black text-sm sm:text-base tracking-tight">
+                                        {activeSectionData.label}
                                     </span>
-                                )}
-                            </button>
-                        );
-                    })}
+                                    {activeSectionData.badge && (
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${
+                                            activeSectionData.badge.includes('MAINTENANCE')
+                                                ? 'bg-red-500 text-white animate-pulse'
+                                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                        }`}>
+                                            {activeSectionData.badge}
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-gray-400 font-medium truncate mt-0.5">
+                                    {activeSectionData.desc}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pl-3 shrink-0">
+                            <span className="text-xs font-bold text-brand-400 hidden sm:inline">Select</span>
+                            <div className="p-1.5 rounded-lg bg-surface border border-gray-700 group-hover:border-brand-500/40 transition">
+                                <ChevronDown className={`w-4 h-4 text-gray-300 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-brand-400' : ''}`} />
+                            </div>
+                        </div>
+                    </button>
+
+                    {/* Dropdown Menu List */}
+                    {isDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-card/95 border border-gray-700/90 rounded-2xl shadow-2xl backdrop-blur-2xl overflow-hidden p-2 space-y-1 animate-fade-in">
+                            {sections.map(sec => {
+                                const SecIcon = sec.icon;
+                                const isSelected = activeSection === sec.id;
+                                return (
+                                    <button
+                                        key={sec.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setActiveSection(sec.id);
+                                            setIsDropdownOpen(false);
+                                        }}
+                                        className={`w-full flex items-center justify-between p-3.5 rounded-xl transition text-left cursor-pointer ${
+                                            isSelected
+                                                ? 'bg-brand-500/15 border border-brand-500/40 text-white'
+                                                : 'hover:bg-surface/80 text-gray-300 border border-transparent'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className={`p-2 rounded-xl border shrink-0 ${sec.color}`}>
+                                                <SecIcon className="w-4 h-4" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-xs sm:text-sm tracking-tight ${isSelected ? 'text-brand-400 font-black' : 'text-white font-bold'}`}>
+                                                        {sec.label}
+                                                    </span>
+                                                    {sec.badge && (
+                                                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${
+                                                            sec.badge.includes('MAINTENANCE')
+                                                                ? 'bg-red-500 text-white'
+                                                                : 'bg-surface text-gray-300 border border-gray-700'
+                                                        }`}>
+                                                            {sec.badge}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[11px] text-gray-400 font-medium truncate mt-0.5">
+                                                    {sec.desc}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {isSelected && (
+                                            <div className="p-1 text-brand-400 shrink-0 ml-2">
+                                                <Check className="w-4 h-4" />
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
 
