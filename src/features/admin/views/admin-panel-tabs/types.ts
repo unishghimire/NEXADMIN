@@ -47,6 +47,11 @@ export type AdminPanelTabProps = Record<string, any> & {
     handleSavePayment?: any;
     handleSavePromo?: any;
     handleSaveSettings?: any;
+    handleSaveFinancial?: any;
+    handleSavePlatform?: any;
+    handleSaveOrganizer?: any;
+    handleSaveSupport?: any;
+    handleSaveDiscord?: any;
     handleSaveSlide?: any;
     handleSuspendOrg?: any;
     handleToggleFeatured?: any;

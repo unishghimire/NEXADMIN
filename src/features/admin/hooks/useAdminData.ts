@@ -1193,6 +1193,89 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         }
     };
 
+    const handleSaveFinancial = async () => {
+        try {
+            const financialData = {
+                minWithdrawal: parseFloat(minWithdrawal) || 0,
+                platformCommission: parseFloat(platformCommission) || 15,
+                updatedAt: serverTimestamp()
+            };
+            await setDoc(doc(db, 'settings', 'site'), financialData, { merge: true });
+            setSiteSettings(prev => ({ ...(prev || {}), ...financialData } as any));
+            showToast('Financial & commission settings saved!', 'success');
+        } catch (error) {
+            console.error("Error saving financial settings:", error);
+            showToast('Failed to save financial settings', 'error');
+        }
+    };
+
+    const handleSavePlatform = async () => {
+        try {
+            const platformData = {
+                maintenanceMode,
+                notice,
+                isNoticeActive,
+                updatedAt: serverTimestamp()
+            };
+            await setDoc(doc(db, 'settings', 'site'), platformData, { merge: true });
+            setSiteSettings(prev => ({ ...(prev || {}), ...platformData } as any));
+            showToast('Platform status & notice settings saved!', 'success');
+        } catch (error) {
+            console.error("Error saving platform settings:", error);
+            showToast('Failed to save platform settings', 'error');
+        }
+    };
+
+    const handleSaveOrganizer = async () => {
+        try {
+            const organizerData = {
+                isOrgFormOpen: siteSettings?.isOrgFormOpen ?? true,
+                orgFormDescription,
+                updatedAt: serverTimestamp()
+            };
+            await setDoc(doc(db, 'settings', 'site'), organizerData, { merge: true });
+            setSiteSettings(prev => ({ ...(prev || {}), ...organizerData } as any));
+            showToast('Organizer portal settings saved!', 'success');
+        } catch (error) {
+            console.error("Error saving organizer settings:", error);
+            showToast('Failed to save organizer settings', 'error');
+        }
+    };
+
+    const handleSaveSupport = async () => {
+        try {
+            const supportData = {
+                supportEmail,
+                supportPhone,
+                updatedAt: serverTimestamp()
+            };
+            await setDoc(doc(db, 'settings', 'site'), supportData, { merge: true });
+            setSiteSettings(prev => ({ ...(prev || {}), ...supportData } as any));
+            showToast('Support & contact info saved!', 'success');
+        } catch (error) {
+            console.error("Error saving support info:", error);
+            showToast('Failed to save support info', 'error');
+        }
+    };
+
+    const handleSaveDiscord = async () => {
+        try {
+            const discordData = {
+                discordWebhooks,
+                discordWebhookTournaments: (discordWebhooks.tournaments?.announcement || discordWebhookTournaments || '').trim(),
+                discordWebhookScrims: (discordWebhooks.scrims?.announcement || '').trim(),
+                autoDiscordTournamentAnnouncements: discordWebhooks.autoAnnounce?.tournaments ?? autoDiscordTournamentAnnouncements,
+                updatedAt: serverTimestamp()
+            };
+            await setDoc(doc(db, 'settings', 'site'), discordData, { merge: true });
+            setSiteSettings(prev => ({ ...(prev || {}), ...discordData } as any));
+            showToast('Discord multi-webhook settings saved!', 'success');
+        } catch (error) {
+            console.error("Error saving discord webhooks:", error);
+            showToast('Failed to save discord webhooks', 'error');
+        }
+    };
+
     const toggleOrgForm = async () => {
         try {
             const currentVal = siteSettings?.isOrgFormOpen ?? true;
@@ -1483,6 +1566,11 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             handleSavePayment,
             handleSavePromo,
             handleSaveSettings,
+            handleSaveFinancial,
+            handleSavePlatform,
+            handleSaveOrganizer,
+            handleSaveSupport,
+            handleSaveDiscord,
             handleSaveSlide,
             handleSuspendOrg,
             handleToggleFeatured,
