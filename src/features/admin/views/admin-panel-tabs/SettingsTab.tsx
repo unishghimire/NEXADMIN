@@ -1,162 +1,547 @@
-import React from 'react';
-import {Users, Settings, Megaphone, AlertTriangle} from 'lucide-react';
+import React, { useState } from 'react';
+import {
+    Users,
+    Settings,
+    Megaphone,
+    AlertTriangle,
+    DollarSign,
+    Percent,
+    ShieldAlert,
+    Phone,
+    Mail,
+    Save,
+    CheckCircle2,
+    Sliders,
+    Layers,
+    Sparkles,
+    Eye,
+    HelpCircle,
+    ArrowRight
+} from 'lucide-react';
 
 import { AdminPanelTabProps } from './types';
 
+type SettingsSection = 'financial' | 'platform' | 'organizer' | 'support' | 'discord' | 'all';
+
 export const SettingsTab: React.FC<AdminPanelTabProps> = (props) => {
-    const { handleSaveSettings, isNoticeActive, maintenanceMode, minWithdrawal, notice, orgFormDescription, platformCommission, setIsNoticeActive, setMaintenanceMode, setMinWithdrawal, setNotice, setOrgFormDescription, setPlatformCommission, setSupportEmail, setSupportPhone, siteSettings, supportEmail, supportPhone, toggleOrgForm } = props;
+    const {
+        handleSaveSettings,
+        isNoticeActive,
+        maintenanceMode,
+        minWithdrawal,
+        notice,
+        orgFormDescription,
+        platformCommission,
+        setIsNoticeActive,
+        setMaintenanceMode,
+        setMinWithdrawal,
+        setNotice,
+        setOrgFormDescription,
+        setPlatformCommission,
+        setSupportEmail,
+        setSupportPhone,
+        siteSettings,
+        supportEmail,
+        supportPhone,
+        toggleOrgForm,
+        discordWebhooks,
+        setDiscordWebhooks,
+        showToast
+    } = props;
+
+    const [activeSection, setActiveSection] = useState<SettingsSection>('financial');
+    const [isSaving, setIsSaving] = useState(false);
+
+    const onSave = async () => {
+        if (!handleSaveSettings) return;
+        setIsSaving(true);
+        try {
+            await handleSaveSettings();
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Financial calculations for live visual split preview
+    const commissionNum = Math.min(100, Math.max(0, Number(platformCommission) || 15));
+    const orgShareNum = 100 - commissionNum;
+    const exampleProfit = 1000;
+    const examplePlatformCut = Math.round((exampleProfit * commissionNum) / 100);
+    const exampleOrgNet = exampleProfit - examplePlatformCut;
+
+    const sections = [
+        { id: 'financial' as const, label: 'Financial & Commission', icon: DollarSign, badge: `${commissionNum}% Cut` },
+        { id: 'platform' as const, label: 'Platform & Maintenance', icon: ShieldAlert, badge: maintenanceMode ? 'MAINTENANCE' : undefined },
+        { id: 'organizer' as const, label: 'Organizer Portal', icon: Users, badge: siteSettings?.isOrgFormOpen ?? true ? 'Open' : 'Closed' },
+        { id: 'support' as const, label: 'Support & Contacts', icon: Mail },
+        { id: 'discord' as const, label: 'Discord Webhooks', icon: Megaphone },
+        { id: 'all' as const, label: 'All Settings', icon: Layers }
+    ];
+
     return (
-                <div className="bg-card p-6 rounded-xl border border-gray-800 space-y-8">
-                    <div className="border-b border-gray-700 pb-4">
-                        <h2 className="text-xl font-bold text-white uppercase tracking-widest flex items-center gap-2">
-                            <Settings className="text-brand-500" /> Site Configuration
-                        </h2>
-                        <p className="text-xs text-gray-500 mt-1 uppercase font-bold">Manage global application settings and support info.</p>
+        <div className="space-y-8 animate-fade-in">
+            {/* Top Control Bar with Sub-Navigation & Save Action */}
+            <div className="bg-card p-4 sm:p-6 rounded-2xl border border-gray-800 shadow-xl space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-5">
+                    <div className="flex items-center gap-3">
+                        <div className="p-3 bg-brand-500/10 text-brand-400 rounded-2xl border border-brand-500/20">
+                            <Settings className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                Site Configuration
+                            </h2>
+                            <p className="text-xs text-gray-400 font-medium mt-0.5">
+                                Configure platform fees, system notices, organizer rules, and integrations.
+                            </p>
+                        </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-6">
-                            <h3 className="text-sm font-bold text-brand-400 uppercase tracking-widest border-l-2 border-brand-500 pl-3">Financial Settings</h3>
-                            <div>
-                                <label htmlFor="min-withdrawal" className="text-xs text-gray-500 uppercase font-bold mb-1 block">Minimum Withdrawal Amount</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">Rs.</span>
-                                    <input 
-                                        type="number" 
-                                        id="min-withdrawal"
-                                        value={minWithdrawal}
-                                        onChange={e => setMinWithdrawal(e.target.value)}
-                                        className="w-full bg-dark border border-gray-700 rounded-lg p-3 pl-10 text-white focus:border-brand-500 focus-visible:outline-none"
-                                    />
-                                </div>
+                    <button
+                        type="button"
+                        onClick={onSave}
+                        disabled={isSaving}
+                        className="flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-7 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg shadow-brand-600/25 cursor-pointer shrink-0"
+                    >
+                        <Save className="w-4 h-4" />
+                        <span>{isSaving ? 'Saving...' : 'Save All Settings'}</span>
+                    </button>
+                </div>
+
+                {/* Sub-Navigation Category Pills */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-800">
+                    {sections.map(sec => {
+                        const Icon = sec.icon;
+                        const isSelected = activeSection === sec.id;
+                        return (
+                            <button
+                                key={sec.id}
+                                type="button"
+                                onClick={() => setActiveSection(sec.id)}
+                                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition whitespace-nowrap cursor-pointer border ${
+                                    isSelected
+                                        ? 'bg-brand-500 text-white border-brand-400 shadow-md shadow-brand-500/20'
+                                        : 'bg-dark/80 text-gray-400 border-gray-800 hover:border-gray-700 hover:text-white'
+                                }`}
+                            >
+                                <Icon className="w-4 h-4" />
+                                <span>{sec.label}</span>
+                                {sec.badge && (
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${
+                                        sec.badge === 'MAINTENANCE'
+                                            ? 'bg-red-500 text-white animate-pulse'
+                                            : isSelected
+                                                ? 'bg-black/30 text-white'
+                                                : 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
+                                    }`}>
+                                        {sec.badge}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* SECTION 1: FINANCIAL & COMMISSION */}
+            {(activeSection === 'financial' || activeSection === 'all') && (
+                <div className="bg-card p-6 sm:p-8 rounded-2xl border border-gray-800 space-y-6 shadow-xl relative overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+                                <DollarSign className="w-5 h-5" />
                             </div>
                             <div>
-                                <label htmlFor="platform-commission" className="text-xs text-gray-500 uppercase font-bold mb-1 block">Platform Commission Rate (%)</label>
+                                <h3 className="text-base font-black text-white uppercase tracking-wider">
+                                    Financial Settings & Platform Commission
+                                </h3>
+                                <p className="text-xs text-gray-400 font-medium">
+                                    Configure the revenue split applied to completed tournaments and scrims.
+                                </p>
+                            </div>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-3 py-1 rounded-full uppercase">
+                            Active: {commissionNum}% Platform / {orgShareNum}% Org
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Input Controls */}
+                        <div className="space-y-6">
+                            {/* Platform Commission Rate */}
+                            <div className="bg-dark/60 p-5 rounded-2xl border border-gray-800 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label htmlFor="platform-commission" className="text-xs font-black text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                                        <Percent className="w-4 h-4 text-emerald-400" />
+                                        Platform Commission Rate (%)
+                                    </label>
+                                    <span className="text-xs font-bold text-emerald-400 font-mono">{commissionNum}% Cut</span>
+                                </div>
                                 <div className="relative">
-                                    <input 
-                                        type="number" 
+                                    <input
+                                        type="number"
                                         id="platform-commission"
                                         min="0"
                                         max="100"
                                         value={platformCommission ?? '15'}
                                         onChange={e => setPlatformCommission && setPlatformCommission(e.target.value)}
                                         placeholder="15"
-                                        className="w-full bg-dark border border-gray-700 rounded-lg p-3 pr-10 text-white focus:border-brand-500 focus-visible:outline-none font-bold"
+                                        className="w-full bg-surface border border-gray-700 rounded-xl p-3.5 pr-12 text-white font-black text-lg focus:border-brand-500 focus-visible:outline-none transition"
                                     />
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 font-black text-sm">%</span>
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400 font-black text-base">%</span>
                                 </div>
-                                <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
-                                    Platform revenue share from completed match net profit. Example: <span className="text-emerald-400 font-bold">{platformCommission || 15}%</span> Platform Cut, leaving <span className="text-brand-400 font-bold">{100 - (Number(platformCommission) || 15)}%</span> to the organizer.
+                                <p className="text-[11px] text-gray-400 font-medium">
+                                    Percentage of match net profit (Entry Fees minus Prize Pool) retained by NexPlay. The remaining <span className="text-brand-400 font-bold">{orgShareNum}%</span> is automatically credited to the organizer upon release.
+                                </p>
+                            </div>
+
+                            {/* Minimum Withdrawal Amount */}
+                            <div className="bg-dark/60 p-5 rounded-2xl border border-gray-800 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label htmlFor="min-withdrawal" className="text-xs font-black text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                                        <DollarSign className="w-4 h-4 text-brand-400" />
+                                        Minimum Withdrawal Amount (Rs.)
+                                    </label>
+                                </div>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-black text-sm">Rs.</span>
+                                    <input
+                                        type="number"
+                                        id="min-withdrawal"
+                                        value={minWithdrawal}
+                                        onChange={e => setMinWithdrawal(e.target.value)}
+                                        placeholder="500"
+                                        className="w-full bg-surface border border-gray-700 rounded-xl p-3.5 pl-12 text-white font-black text-lg focus:border-brand-500 focus-visible:outline-none transition"
+                                    />
+                                </div>
+                                <p className="text-[11px] text-gray-400 font-medium">
+                                    Minimum payout limit allowed per eSewa, Khalti, or Bank Transfer request. Protects against spam transactions.
                                 </p>
                             </div>
                         </div>
 
-                        <div className="space-y-6">
-                            <h3 className="text-sm font-bold text-brand-400 uppercase tracking-widest border-l-2 border-brand-500 pl-3">Support Info</h3>
-                            <div className="grid grid-cols-1 gap-4">
-                                <div>
-                                    <label htmlFor="support-email" className="text-xs text-gray-500 uppercase font-bold mb-1 block">Support Email</label>
-                                    <input 
-                                        type="email" 
-                                        value={supportEmail}
-                                        onChange={e => setSupportEmail(e.target.value)}
-                                        className="w-full bg-dark border border-gray-700 rounded-lg p-3 text-white focus:border-brand-500 focus-visible:outline-none"
-                                    />
+                        {/* Live Revenue Split Visualizer */}
+                        <div className="bg-dark/80 p-6 rounded-2xl border border-gray-800 flex flex-col justify-between space-y-6">
+                            <div>
+                                <div className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-wider mb-3">
+                                    <Sparkles className="w-4 h-4 text-brand-400" />
+                                    Live Revenue Split Preview
                                 </div>
-                                <div>
-                                    <label htmlFor="support-phone" className="text-xs text-gray-500 uppercase font-bold mb-1 block">Support Phone / WhatsApp</label>
-                                    <input 
-                                        type="text" 
-                                        value={supportPhone}
-                                        onChange={e => setSupportPhone(e.target.value)}
-                                        className="w-full bg-dark border border-gray-700 rounded-lg p-3 text-white focus:border-brand-500 focus-visible:outline-none"
-                                    />
+
+                                {/* Split Bar */}
+                                <div className="w-full h-8 rounded-xl overflow-hidden flex shadow-inner border border-gray-700">
+                                    <div
+                                        style={{ width: `${commissionNum}%` }}
+                                        className="bg-emerald-500 flex items-center justify-center text-white text-[11px] font-black uppercase tracking-wider transition-all duration-300"
+                                        title={`Platform Cut: ${commissionNum}%`}
+                                    >
+                                        {commissionNum >= 12 && `${commissionNum}% Platform`}
+                                    </div>
+                                    <div
+                                        style={{ width: `${orgShareNum}%` }}
+                                        className="bg-brand-500 flex items-center justify-center text-white text-[11px] font-black uppercase tracking-wider transition-all duration-300"
+                                        title={`Organizer Share: ${orgShareNum}%`}
+                                    >
+                                        {orgShareNum >= 12 && `${orgShareNum}% Organizer`}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-between items-center text-[11px] text-gray-400 font-mono mt-2 px-1">
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                                        Platform Cut: <strong className="text-emerald-400">{commissionNum}%</strong>
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-brand-500 inline-block" />
+                                        Organizer Net: <strong className="text-brand-400">{orgShareNum}%</strong>
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Practical Example Box */}
+                            <div className="p-4 rounded-xl bg-surface/60 border border-gray-800 space-y-2.5">
+                                <div className="text-[11px] font-black text-gray-400 uppercase tracking-wider">
+                                    Example Calculation (Rs. {exampleProfit.toLocaleString()} Net Match Profit)
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div className="p-3 bg-dark/70 rounded-lg border border-emerald-500/20">
+                                        <div className="text-[10px] text-gray-400 uppercase font-bold">NexPlay Platform Cut</div>
+                                        <div className="text-lg font-black text-emerald-400 mt-0.5">
+                                            Rs. {examplePlatformCut.toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <div className="p-3 bg-dark/70 rounded-lg border border-brand-500/20">
+                                        <div className="text-[10px] text-gray-400 uppercase font-bold">Organizer Share</div>
+                                        <div className="text-lg font-black text-brand-400 mt-0.5">
+                                            Rs. {exampleOrgNet.toLocaleString()}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-
-                        <div className="col-span-full space-y-6">
-                            <h3 className="text-sm font-bold text-brand-400 uppercase tracking-widest border-l-2 border-brand-500 pl-3">Maintenance</h3>
-                            <div className="bg-dark p-4 rounded-xl border border-gray-800 space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <AlertTriangle className="text-red-500 w-5 h-5" />
-                                        <span className="text-sm text-white font-bold uppercase">Maintenance Mode</span>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" checked={maintenanceMode} onChange={e => setMaintenanceMode(e.target.checked)} className="sr-only peer" />
-                                        <div className="w-11 h-6 bg-surface peer-focus:focus-visible:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-colors peer-checked:bg-red-600"></div>
-                                    </label>
-                                </div>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase">When enabled, the entire website will be disabled for normal users. Only Admins can access the site.</p>
-                            </div>
-
-                            <h3 className="text-sm font-bold text-brand-400 uppercase tracking-widest border-l-2 border-brand-500 pl-3">System Notice</h3>
-                            <div className="bg-dark p-4 rounded-xl border border-gray-800 space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Megaphone className="text-brand-500 w-5 h-5" />
-                                        <span className="text-sm text-white font-bold uppercase">Display Site-wide Notice</span>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" checked={isNoticeActive} onChange={e => setIsNoticeActive(e.target.checked)} className="sr-only peer" />
-                                        <div className="w-11 h-6 bg-surface peer-focus:focus-visible:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-colors peer-checked:bg-brand-600"></div>
-                                    </label>
-                                </div>
-                                <textarea 
-                                    value={notice}
-                                    onChange={e => setNotice(e.target.value)}
-                                    className="w-full bg-surface border border-gray-700 rounded-lg p-4 text-white focus:border-brand-500 focus-visible:outline-none h-32"
-                                    placeholder="Enter notice message here... (e.g. Scheduled maintenance at 10 PM)"
-                                />
-                            </div>
-
-                            <h3 className="text-sm font-bold text-brand-400 uppercase tracking-widest border-l-2 border-brand-500 pl-3 pt-4">Organizer Settings</h3>
-                            <div className="bg-dark p-4 rounded-xl border border-gray-800 space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Users className="text-brand-500 w-5 h-5" />
-                                        <span className="text-sm text-white font-bold uppercase">Open Organizer Applications</span>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" checked={siteSettings?.isOrgFormOpen ?? true} onChange={toggleOrgForm} className="sr-only peer" />
-                                        <div className="w-11 h-6 bg-surface peer-focus:focus-visible:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-colors peer-checked:bg-brand-600"></div>
-                                    </label>
-                                </div>
-                                <p className="text-[10px] text-gray-500 uppercase font-bold">Toggle whether users can apply to become an organization from the contact page.</p>
-                                
-                                <div className="pt-4 border-t border-gray-800">
-                                    <label htmlFor="organizer-form-desc" className="text-[10px] text-gray-500 uppercase font-black mb-2 block tracking-widest">Organizer Form Description</label>
-                                    <textarea 
-                                        value={orgFormDescription}
-                                        onChange={e => setOrgFormDescription(e.target.value)}
-                                        className="w-full bg-surface border border-gray-700 rounded-lg p-4 text-white focus:border-brand-500 focus-visible:outline-none h-32 text-sm"
-                                        placeholder="Explain the requirements for becoming an organizer..."
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Main Discord Server Integration */}
-                            <h3 className="text-sm font-bold text-[#5865F2] uppercase tracking-widest border-l-2 border-[#5865F2] pl-3 pt-4 flex items-center gap-2">
-                                Discord Server Multi-Webhook Automation
-                            </h3>
-                            <DiscordSettingsCard 
-                                discordWebhooks={props.discordWebhooks}
-                                setDiscordWebhooks={props.setDiscordWebhooks}
-                                showToast={props.showToast}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="pt-6 border-t border-gray-800 flex justify-end">
-                        <button type="button" 
-                            onClick={handleSaveSettings}
-                            className="bg-brand-600 hover:bg-brand-500 text-white px-10 py-3 rounded-xl font-bold transition shadow-lg shadow-brand-600/20 uppercase tracking-widest"
-                        >
-                            Save All Settings
-                        </button>
                     </div>
                 </div>
+            )}
+
+            {/* SECTION 2: PLATFORM & MAINTENANCE */}
+            {(activeSection === 'platform' || activeSection === 'all') && (
+                <div className="bg-card p-6 sm:p-8 rounded-2xl border border-gray-800 space-y-6 shadow-xl">
+                    <div className="flex items-center gap-3 border-b border-gray-800 pb-4">
+                        <div className="p-2.5 bg-red-500/10 text-red-400 rounded-xl border border-red-500/20">
+                            <ShieldAlert className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-black text-white uppercase tracking-wider">
+                                Platform Status & Broadcast Notices
+                            </h3>
+                            <p className="text-xs text-gray-400 font-medium">
+                                Control site-wide maintenance lockdown and real-time public announcements.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Maintenance Mode Card */}
+                        <div className="bg-dark/60 p-6 rounded-2xl border border-gray-800 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                    <AlertTriangle className={`w-5 h-5 ${maintenanceMode ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} />
+                                    <div>
+                                        <div className="text-sm text-white font-black uppercase tracking-wide">Maintenance Mode</div>
+                                        <div className={`text-[10px] font-bold uppercase tracking-wider ${maintenanceMode ? 'text-red-400' : 'text-gray-500'}`}>
+                                            {maintenanceMode ? 'ACTIVE — Public Access Blocked' : 'INACTIVE — System Live'}
+                                        </div>
+                                    </div>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={maintenanceMode}
+                                        onChange={e => setMaintenanceMode(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-12 h-6 bg-surface peer-focus:focus-visible:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-colors peer-checked:bg-red-600"></div>
+                                </label>
+                            </div>
+
+                            {maintenanceMode && (
+                                <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-xs text-red-300 font-medium flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                                    <span>Warning: All regular player and organizer views are currently locked behind the maintenance splash screen.</span>
+                                </div>
+                            )}
+
+                            <p className="text-xs text-gray-400 leading-relaxed font-medium">
+                                When enabled, standard users are directed to the maintenance page. Administrators retain full access to manage and test the site.
+                            </p>
+                        </div>
+
+                        {/* Broadcast Notice Card */}
+                        <div className="bg-dark/60 p-6 rounded-2xl border border-gray-800 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                    <Megaphone className="w-5 h-5 text-brand-400" />
+                                    <div>
+                                        <div className="text-sm text-white font-black uppercase tracking-wide">Site-Wide Notice Banner</div>
+                                        <div className={`text-[10px] font-bold uppercase tracking-wider ${isNoticeActive ? 'text-brand-400' : 'text-gray-500'}`}>
+                                            {isNoticeActive ? 'BROADCASTING NOW' : 'DISABLED'}
+                                        </div>
+                                    </div>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={isNoticeActive}
+                                        onChange={e => setIsNoticeActive(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-12 h-6 bg-surface peer-focus:focus-visible:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-colors peer-checked:bg-brand-500"></div>
+                                </label>
+                            </div>
+
+                            <textarea
+                                value={notice}
+                                onChange={e => setNotice(e.target.value)}
+                                className="w-full bg-surface border border-gray-700 rounded-xl p-3.5 text-white text-xs focus:border-brand-500 focus-visible:outline-none h-24 transition leading-relaxed"
+                                placeholder="Enter public announcement... (e.g. Server maintenance scheduled tonight at 11:00 PM NPT. All matches paused.)"
+                            />
+
+                            {/* Live Notice Preview */}
+                            {isNoticeActive && notice && (
+                                <div className="p-3 bg-brand-950/30 border border-brand-500/30 rounded-xl flex items-center gap-2.5 text-xs text-brand-200">
+                                    <Megaphone className="w-4 h-4 text-brand-400 shrink-0" />
+                                    <span className="font-semibold">{notice}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SECTION 3: ORGANIZER PORTAL CONFIGURATION */}
+            {(activeSection === 'organizer' || activeSection === 'all') && (
+                <div className="bg-card p-6 sm:p-8 rounded-2xl border border-gray-800 space-y-6 shadow-xl">
+                    <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-brand-500/10 text-brand-400 rounded-xl border border-brand-500/20">
+                                <Users className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-black text-white uppercase tracking-wider">
+                                    Organizer Applications & Requirements
+                                </h3>
+                                <p className="text-xs text-gray-400 font-medium">
+                                    Manage who can apply for verified host status and set application criteria.
+                                </p>
+                            </div>
+                        </div>
+                        <span className={`text-xs font-mono font-bold px-3 py-1 rounded-full uppercase border ${
+                            siteSettings?.isOrgFormOpen ?? true
+                                ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30'
+                                : 'text-amber-400 bg-amber-950/40 border-amber-500/30'
+                        }`}>
+                            {siteSettings?.isOrgFormOpen ?? true ? 'Applications Open' : 'Applications Closed'}
+                        </span>
+                    </div>
+
+                    <div className="space-y-6">
+                        <div className="bg-dark/60 p-6 rounded-2xl border border-gray-800 flex items-center justify-between">
+                            <div>
+                                <div className="text-sm text-white font-black uppercase tracking-wide">
+                                    Accept New Organizer Applications
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1 font-medium">
+                                    When active, players can submit verification forms to host tournaments and scrims from the contact page.
+                                </p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                                <input
+                                    type="checkbox"
+                                    checked={siteSettings?.isOrgFormOpen ?? true}
+                                    onChange={toggleOrgForm}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-12 h-6 bg-surface peer-focus:focus-visible:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-colors peer-checked:bg-brand-500"></div>
+                            </label>
+                        </div>
+
+                        <div className="bg-dark/60 p-6 rounded-2xl border border-gray-800 space-y-2">
+                            <label htmlFor="organizer-form-desc" className="text-xs font-black text-gray-300 uppercase tracking-wider block">
+                                Application Guidelines & Requirement Instructions
+                            </label>
+                            <textarea
+                                id="organizer-form-desc"
+                                value={orgFormDescription}
+                                onChange={e => setOrgFormDescription(e.target.value)}
+                                className="w-full bg-surface border border-gray-700 rounded-xl p-4 text-white text-xs focus:border-brand-500 focus-visible:outline-none h-32 leading-relaxed transition font-medium"
+                                placeholder="Explain guidelines for applicants (e.g. Valid Nepali Citizenship/ID, past tournament hosting experience, minimum social media audience, and verified payment details required)..."
+                            />
+                            <p className="text-[11px] text-gray-400 font-medium">
+                                Displayed at the top of the organizer application modal to guide prospective hosts.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SECTION 4: SUPPORT & CONTACTS */}
+            {(activeSection === 'support' || activeSection === 'all') && (
+                <div className="bg-card p-6 sm:p-8 rounded-2xl border border-gray-800 space-y-6 shadow-xl">
+                    <div className="flex items-center gap-3 border-b border-gray-800 pb-4">
+                        <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
+                            <Mail className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-black text-white uppercase tracking-wider">
+                                Official Support & Contact Channels
+                            </h3>
+                            <p className="text-xs text-gray-400 font-medium">
+                                Primary communication routes displayed to players and organizers across the portal.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-dark/60 p-6 rounded-2xl border border-gray-800 space-y-2">
+                            <label htmlFor="support-email" className="text-xs font-black text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                                <Mail className="w-4 h-4 text-blue-400" />
+                                Official Support Email
+                            </label>
+                            <input
+                                type="email"
+                                id="support-email"
+                                value={supportEmail}
+                                onChange={e => setSupportEmail(e.target.value)}
+                                placeholder="support@nexplay.gg"
+                                className="w-full bg-surface border border-gray-700 rounded-xl p-3.5 text-white text-sm focus:border-brand-500 focus-visible:outline-none transition font-medium"
+                            />
+                            <p className="text-[11px] text-gray-400 font-medium">
+                                Displayed on error pages, transaction queries, and dispute contact sections.
+                            </p>
+                        </div>
+
+                        <div className="bg-dark/60 p-6 rounded-2xl border border-gray-800 space-y-2">
+                            <label htmlFor="support-phone" className="text-xs font-black text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                                <Phone className="w-4 h-4 text-emerald-400" />
+                                Support Phone / WhatsApp Hotline
+                            </label>
+                            <input
+                                type="text"
+                                id="support-phone"
+                                value={supportPhone}
+                                onChange={e => setSupportPhone(e.target.value)}
+                                placeholder="+977 98XXXXXXXX"
+                                className="w-full bg-surface border border-gray-700 rounded-xl p-3.5 text-white text-sm focus:border-brand-500 focus-visible:outline-none transition font-medium"
+                            />
+                            <p className="text-[11px] text-gray-400 font-medium">
+                                Used for urgent payment escalations, organizer verification, and dispute resolution.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SECTION 5: DISCORD MULTI-WEBHOOK AUTOMATION */}
+            {(activeSection === 'discord' || activeSection === 'all') && (
+                <div className="bg-card p-6 sm:p-8 rounded-2xl border border-gray-800 space-y-6 shadow-xl">
+                    <div className="flex items-center gap-3 border-b border-gray-800 pb-4">
+                        <div className="p-2.5 bg-[#5865F2]/10 text-[#5865F2] rounded-xl border border-[#5865F2]/20">
+                            <Megaphone className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-black text-white uppercase tracking-wider">
+                                Discord Server Multi-Webhook Automation
+                            </h3>
+                            <p className="text-xs text-gray-400 font-medium">
+                                Real-time broadcast hooks for tournaments and scrim announcements, draws, and results.
+                            </p>
+                        </div>
+                    </div>
+
+                    <DiscordSettingsCard
+                        discordWebhooks={props.discordWebhooks}
+                        setDiscordWebhooks={props.setDiscordWebhooks}
+                        showToast={props.showToast}
+                    />
+                </div>
+            )}
+
+            {/* Bottom Save Action Bar */}
+            <div className="bg-card p-5 rounded-2xl border border-gray-800 flex items-center justify-between shadow-xl">
+                <div className="text-xs text-gray-400 font-medium hidden sm:block">
+                    Changes take effect across the platform immediately after saving.
+                </div>
+                <button
+                    type="button"
+                    onClick={onSave}
+                    disabled={isSaving}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-10 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg shadow-brand-600/25 cursor-pointer ml-auto"
+                >
+                    <Save className="w-4 h-4" />
+                    <span>{isSaving ? 'Saving Changes...' : 'Save All Settings'}</span>
+                </button>
+            </div>
+        </div>
     );
 };
 

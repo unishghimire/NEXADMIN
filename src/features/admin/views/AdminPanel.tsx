@@ -58,6 +58,17 @@ const AdminPanel: React.FC = () => {
                             <Users className={`w-5 h-5 ${activeTab === 'tab-users' ? 'text-white' : 'text-gray-500'}`} />
                             Manage Users
                         </button>
+                        <button type="button" 
+                            onClick={() => { setActiveTab('tab-settings'); setIsSidebarOpen(false); }} 
+                            className={`w-full text-left px-5 py-4 rounded-full font-black text-xs uppercase tracking-widest transition-colors flex items-center gap-4 ${
+                                activeTab === 'tab-settings' 
+                                    ? 'bg-brand-500 text-white shadow-xl shadow-brand-500/20' 
+                                    : 'text-gray-400 hover:bg-surface/50 hover:text-white'
+                            }`}
+                        >
+                            <Sliders className={`w-5 h-5 ${activeTab === 'tab-settings' ? 'text-white' : 'text-gray-500'}`} />
+                            Settings & Config
+                        </button>
                     </div>
                 </div>
 
@@ -196,8 +207,25 @@ const AdminPanel: React.FC = () => {
 
             {/* Main Content Area */}
             <div className="flex-1 bg-dark/50 rounded-2xl sm:rounded-[2rem] border border-gray-800 p-4 sm:p-6 lg:p-8 min-h-[500px] sm:min-h-[600px] w-full overflow-hidden">
-                <header className="mb-10 pb-8 border-b border-gray-800">
-                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white uppercase tracking-tighter">Admin Panel</h1>
+                <header className="mb-8 pb-6 border-b border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white uppercase tracking-tighter">Admin Panel</h1>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-1">Platform Control & Operations Center</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('tab-settings')}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-wider transition cursor-pointer border shadow-lg ${
+                                activeTab === 'tab-settings'
+                                    ? 'bg-brand-500 text-white border-brand-400 shadow-brand-500/20'
+                                    : 'bg-card text-gray-300 border-gray-700 hover:border-brand-500/50 hover:text-white'
+                            }`}
+                        >
+                            <Sliders className="w-4 h-4 text-brand-400" />
+                            <span>Settings & Commission</span>
+                        </button>
+                    </div>
                 </header>
                 {activeTab === 'tab-dashboard' && <TabErrorBoundary tabName="Dashboard Tab"><DashboardTab {...tabProps} /></TabErrorBoundary>}
                 {activeTab === 'tab-tournaments' && <TabErrorBoundary tabName="Tournaments Tab"><TournamentsTab {...tabProps} /></TabErrorBoundary>}
