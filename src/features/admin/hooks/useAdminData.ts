@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, orderBy, limit, setDoc, serverTimestamp, getDoc, writeBatch, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../../../shared/config/firebase';
 import { useAuth } from '../../../shared/context/AuthContext';
-import { Transaction, UserProfile, Slide, PromoCode, Game, PaymentMethod, PaymentCategory, SiteSettings, DiscordWebhooksConfig, OrgApplication, Tournament, TournamentEarning } from '../../../shared/types/types';
+import { Transaction, UserProfile, Slide, PromoCode, Game, PaymentMethod, PaymentCategory, SiteSettings, DiscordWebhooksConfig, OrgApplication, PowerOrgApplication, Tournament, TournamentEarning } from '../../../shared/types/types';
 import { GameScoringConfig } from '../../../shared/types/scoring';
 import { DEFAULT_BANNER, NEXPLAY_LOGO } from '../../../shared/constants/constants';
 import { ImageUploader } from '../../../shared/components/ImageUploader';
@@ -18,6 +18,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
     const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
     const [allTournaments, setAllTournaments] = useState<Tournament[]>([]);
     const [orgApplications, setOrgApplications] = useState<OrgApplication[]>([]);
+    const [powerOrgApplications, setPowerOrgApplications] = useState<PowerOrgApplication[]>([]);
     const [organizers, setOrganizers] = useState<UserProfile[]>([]);
     const [orgTournaments, setOrgTournaments] = useState<Tournament[]>([]);
     const [selectedOrgId, setSelectedOrgId] = useState<string>('');
@@ -293,6 +294,8 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
                 getDoc(doc(db, 'settings', 'site')),
                 // 15: today's transactions for stats
                 getDocs(query(collection(db, 'transactions'), where('timestamp', '>=', new Date(new Date().setHours(0, 0, 0, 0))), limit(200))),
+                // 16: power org applications
+                getDocs(query(collection(db, 'power_org_applications'), limit(200))),
             ]);
 
             // Apply results — each one checked independently
@@ -392,6 +395,16 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
                         }
                     }));
                 }
+            }
+
+            if (results[15]?.status === 'fulfilled') {
+                const powerApps = ((results[15].value as any).docs || []).map((d: any) => ({ id: d.id, ...d.data() } as PowerOrgApplication));
+                powerApps.sort((a: any, b: any) => {
+                    const aTime = toDateSafe(a.appliedAt || a.timestamp)?.getTime() || 0;
+                    const bTime = toDateSafe(b.appliedAt || b.timestamp)?.getTime() || 0;
+                    return bTime - aTime;
+                });
+                setPowerOrgApplications(powerApps);
             }
 
             // Calculate stats
@@ -738,6 +751,114 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         } catch (error) {
             console.error("Error rejecting org:", error);
             showToast('Failed to reject application', 'error');
+        }
+    };
+
+    const handleApprovePowerOrg = async (app: PowerOrgApplication) => {
+        try {
+            const batch = writeBatch(db);
+            const appRef = doc(db, 'power_org_applications', app.id);
+            const userRef = doc(db, 'users', app.userId);
+            const publicUserRef = doc(db, 'users_public', app.userId);
+            const adminUid = auth.currentUser?.uid || 'admin';
+
+            batch.update(userRef, {
+                isPowerOrganizer: true,
+                isPowerOrg: true,
+                orgTier: 'power',
+                powerOrgApplicationStatus: 'approved',
+                powerOrgApprovedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+
+            batch.update(appRef, {
+                status: 'approved',
+                reviewedAt: serverTimestamp(),
+                reviewedBy: adminUid,
+            });
+
+            batch.set(publicUserRef, {
+                isPowerOrganizer: true,
+                isPowerOrg: true,
+                orgTier: 'power',
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
+
+            await batch.commit();
+
+            await logAdminAction(
+                'APPROVE_POWER_ORGANIZER',
+                `Approved Power Organizer status for ${app.orgName} (${app.username}) with ${app.completedScrimsCount} verified completed scrims`
+            );
+
+            try {
+                await NotificationService.create(
+                    app.userId,
+                    'Power Organizer Status Granted!',
+                    `Congratulations! Your application for Power Organizer status has been approved. You now have full access to create and host official tournaments on Nexplay!`,
+                    'success',
+                    '/organizer-panel'
+                );
+            } catch (notifyErr) {
+                console.warn('Failed to send power org approval notification:', notifyErr);
+            }
+
+            showToast(`Power Organizer status approved for ${app.orgName || app.username}!`, 'success');
+            setPowerOrgApplications(prev => prev.map(a => a.id === app.id ? { ...a, status: 'approved', reviewedAt: new Date(), reviewedBy: adminUid } : a));
+            setOrganizers(prev => prev.map(o => o.uid === app.userId ? { ...o, isPowerOrganizer: true, isPowerOrg: true, orgTier: 'power', powerOrgApplicationStatus: 'approved' } : o));
+        } catch (error: any) {
+            console.error("Error approving power org:", error);
+            showToast(error.message || 'Failed to approve Power Organizer application', 'error');
+        }
+    };
+
+    const handleRejectPowerOrg = async (app: PowerOrgApplication, adminNotes?: string) => {
+        try {
+            const batch = writeBatch(db);
+            const appRef = doc(db, 'power_org_applications', app.id);
+            const userRef = doc(db, 'users', app.userId);
+            const adminUid = auth.currentUser?.uid || 'admin';
+
+            batch.update(userRef, {
+                powerOrgApplicationStatus: 'rejected',
+                isPowerOrganizer: false,
+                isPowerOrg: false,
+                orgTier: 'standard',
+                updatedAt: serverTimestamp(),
+            });
+
+            batch.update(appRef, {
+                status: 'rejected',
+                reviewedAt: serverTimestamp(),
+                reviewedBy: adminUid,
+                ...(adminNotes ? { adminNotes } : {}),
+            });
+
+            await batch.commit();
+
+            await logAdminAction(
+                'REJECT_POWER_ORGANIZER',
+                `Rejected Power Organizer application for ${app.orgName} (${app.username}). Reason: ${adminNotes || 'Requirements not satisfied'}`
+            );
+
+            try {
+                await NotificationService.create(
+                    app.userId,
+                    'Power Organizer Application Update',
+                    `Your application for Power Organizer status was reviewed. At this time, it was not approved. Continue hosting authentic scrims to re-qualify.`,
+                    'info',
+                    '/organizer-panel'
+                );
+            } catch (notifyErr) {
+                console.warn('Failed to send power org rejection notification:', notifyErr);
+            }
+
+            showToast(`Power Organizer application rejected`, 'info');
+            setPowerOrgApplications(prev => prev.map(a => a.id === app.id ? { ...a, status: 'rejected', reviewedAt: new Date(), reviewedBy: adminUid } : a));
+            setOrganizers(prev => prev.map(o => o.uid === app.userId ? { ...o, isPowerOrganizer: false, isPowerOrg: false, orgTier: 'standard', powerOrgApplicationStatus: 'rejected' } : o));
+        } catch (error: any) {
+            console.error("Error rejecting power org:", error);
+            showToast(error.message || 'Failed to reject Power Organizer application', 'error');
         }
     };
 
@@ -1353,9 +1474,41 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
 
     const togglePowerOrganizer = async (org: UserProfile) => {
         try {
-            const newStatus = !org.isPowerOrganizer;
-            await updateDoc(doc(db, 'users', org.uid), { isPowerOrganizer: newStatus });
-            setOrganizers(prev => prev.map(o => o.uid === org.uid ? { ...o, isPowerOrganizer: newStatus } : o));
+            const newStatus = !(org.isPowerOrganizer || org.isPowerOrg || org.orgTier === 'power');
+            const batch = writeBatch(db);
+            const userRef = doc(db, 'users', org.uid);
+            const publicUserRef = doc(db, 'users_public', org.uid);
+
+            const updateData = {
+                isPowerOrganizer: newStatus,
+                isPowerOrg: newStatus,
+                orgTier: newStatus ? ('power' as const) : ('standard' as const),
+                ...(newStatus ? { powerOrgApprovedAt: serverTimestamp() } : {}),
+                updatedAt: serverTimestamp(),
+            };
+
+            batch.update(userRef, updateData);
+            batch.set(publicUserRef, {
+                isPowerOrganizer: newStatus,
+                isPowerOrg: newStatus,
+                orgTier: newStatus ? 'power' : 'standard',
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
+
+            await batch.commit();
+
+            setOrganizers(prev => prev.map(o => o.uid === org.uid ? {
+                ...o,
+                isPowerOrganizer: newStatus,
+                isPowerOrg: newStatus,
+                orgTier: newStatus ? 'power' : 'standard'
+            } : o));
+
+            await logAdminAction(
+                newStatus ? 'GRANT_POWER_ORGANIZER' : 'REVOKE_POWER_ORGANIZER',
+                `${newStatus ? 'Granted' : 'Revoked'} Power Organizer status for ${org.orgName || org.username}`
+            );
+
             showToast(`Organizer power ${newStatus ? 'granted' : 'revoked'}`, 'success');
         } catch (error) {
             console.error("Error toggling power organizer:", error);
@@ -1430,6 +1583,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         const pendingDepositsCount = pendingTransactions.filter(t => t.type === 'deposit').length;
         const pendingWithdrawalsCount = pendingTransactions.filter(t => t.type === 'withdrawal').length;
         const pendingOrgCount = orgApplications.length;
+        const pendingPowerOrgCount = powerOrgApplications.filter(a => a.status === 'pending').length;
 
         const handleResolveDispute = async (disputeId: string, action: 'warn' | 'ban' | 'dismiss') => {
             if (!disputeId) return;
@@ -1548,6 +1702,10 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             games,
             getRelativeTime,
             handleApproveOrg,
+            handleApprovePowerOrg,
+            handleRejectPowerOrg,
+            powerOrgApplications,
+            pendingPowerOrgCount,
             handleApproveTx,
             handleCancelTournament,
             handleDeleteCategory,
@@ -1722,6 +1880,10 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         organizers,
         pendingDepositsCount,
         pendingOrgCount,
+        pendingPowerOrgCount,
+        powerOrgApplications,
+        handleApprovePowerOrg,
+        handleRejectPowerOrg,
         pendingWithdrawalsCount,
         rejectionReason,
         selectedOrgId,

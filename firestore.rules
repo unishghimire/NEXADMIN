@@ -439,6 +439,12 @@ service cloud.firestore {
       allow update: if isAdmin();
     }
 
+    match /power_org_applications/{appId} {
+      allow read:   if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // DISPUTES — signed-in users can file; the tournament host or an admin can resolve.
     // ═══════════════════════════════════════════════════════════════

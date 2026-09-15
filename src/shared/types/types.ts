@@ -7,6 +7,12 @@ export interface UserProfile {
     username: string;
     role: 'player' | 'organizer' | 'admin';
     isPowerOrganizer?: boolean;
+    isPowerOrg?: boolean;
+    orgTier?: 'standard' | 'power';
+    powerOrgApplicationStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+    powerOrgAppliedAt?: Timestamp | any;
+    powerOrgApprovedAt?: Timestamp | any;
+    completedScrimsCount?: number;
     balance: number;
     totalEarnings: number;
     xp: number;
@@ -605,4 +611,22 @@ export interface TournamentEarning {
     status: 'pending' | 'released' | 'no_earnings';
     createdAt: Timestamp | any;
     releasedAt?: Timestamp | any;
+}
+
+export interface PowerOrgApplication {
+    id: string;
+    userId: string;
+    username: string;
+    orgName: string;
+    email: string;
+    phone?: string;
+    whatsapp?: string;
+    communityLink?: string;
+    completedScrimsCount: number;
+    notes?: string;
+    status: 'pending' | 'approved' | 'rejected';
+    appliedAt: Timestamp | any;
+    reviewedAt?: Timestamp | any;
+    reviewedBy?: string;
+    adminNotes?: string;
 }

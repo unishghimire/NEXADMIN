@@ -119,7 +119,7 @@ const DEPARTMENTS: AdminDepartment[] = [
 const AdminPanel: React.FC = () => {
     const { showToast } = useNotification();
     const {
-        activeTab, adjustmentAmount, adjustmentType, allTournaments, allTransactions, closeConfirmModal, confirmModal, fetchOrgTournaments, getRelativeTime, handleAdjustBalance, handleApproveTx, handleRefundTx, handleRejectTx, handleUpdateUserRole, isTournamentModalOpen, pendingDepositsCount, pendingOrgCount, pendingWithdrawalsCount, rejectionReason, selectedOrgId, selectedTournament, selectedTx, selectedUser, setActiveTab, setAdjustmentAmount, setAdjustmentType, setIsTournamentModalOpen, setRejectionReason, setSelectedTournament, setSelectedTx, setSelectedUser, setTxFilterStatus, setTxFilterTournament, setTxFilterType, setTxSearchUser, tabProps, txFilterStatus, txFilterTournament, txFilterType, txSearchUser
+        activeTab, adjustmentAmount, adjustmentType, allTournaments, allTransactions, closeConfirmModal, confirmModal, fetchOrgTournaments, getRelativeTime, handleAdjustBalance, handleApproveTx, handleRefundTx, handleRejectTx, handleUpdateUserRole, isTournamentModalOpen, pendingDepositsCount, pendingOrgCount, pendingPowerOrgCount, pendingWithdrawalsCount, rejectionReason, selectedOrgId, selectedTournament, selectedTx, selectedUser, setActiveTab, setAdjustmentAmount, setAdjustmentType, setIsTournamentModalOpen, setRejectionReason, setSelectedTournament, setSelectedTx, setSelectedUser, setTxFilterStatus, setTxFilterTournament, setTxFilterType, setTxSearchUser, tabProps, txFilterStatus, txFilterTournament, txFilterType, txSearchUser
     } = useAdminData(showToast);
 
     const [isNavOpen, setIsNavOpen] = useState(false);
@@ -127,7 +127,7 @@ const AdminPanel: React.FC = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const pendingDisputesCount = tabProps.allDisputes?.filter((d: any) => (d.status || 'pending') === 'pending').length || 0;
-    const totalUrgentAlerts = (pendingDepositsCount || 0) + (pendingWithdrawalsCount || 0) + (pendingOrgCount || 0) + pendingDisputesCount;
+    const totalUrgentAlerts = (pendingDepositsCount || 0) + (pendingWithdrawalsCount || 0) + (pendingOrgCount || 0) + (pendingPowerOrgCount || 0) + pendingDisputesCount;
 
     // Handle outside clicks and ESC key for dropdown
     useEffect(() => {
@@ -225,9 +225,9 @@ const AdminPanel: React.FC = () => {
             description: 'Review and approve prospective tournament host applications',
             department: 'organizers',
             icon: Check,
-            badge: pendingOrgCount,
+            badge: (pendingOrgCount || 0) + (pendingPowerOrgCount || 0),
             badgeColor: 'bg-brand-500 text-white',
-            isUrgent: pendingOrgCount > 0
+            isUrgent: ((pendingOrgCount || 0) + (pendingPowerOrgCount || 0)) > 0
         },
         {
             id: 'tab-org-tournaments',
@@ -347,7 +347,7 @@ const AdminPanel: React.FC = () => {
     const getDeptBadge = (deptId: AdminDepartmentId) => {
         switch (deptId) {
             case 'finance': return (pendingDepositsCount || 0) + (pendingWithdrawalsCount || 0);
-            case 'organizers': return pendingOrgCount || 0;
+            case 'organizers': return (pendingOrgCount || 0) + (pendingPowerOrgCount || 0);
             case 'content': return pendingDisputesCount || 0;
             default: return 0;
         }
