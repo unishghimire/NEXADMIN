@@ -1,3 +1,5 @@
+export { FinanceHubTab } from './FinanceHubTab';
+export { EscrowWalletsTab } from './EscrowWalletsTab';
 export { DashboardTab } from './DashboardTab';
 export { TournamentsTab } from './TournamentsTab';
 export { OrgApprovalsTab } from './OrgApprovalsTab';
@@ -15,3 +17,4 @@ export { default as NewsTab } from './NewsTab';
 export { DisputesTab } from './DisputesTab';
 export { SettingsTab } from './SettingsTab';
 export type { AdminPanelTabProps } from './types';
+

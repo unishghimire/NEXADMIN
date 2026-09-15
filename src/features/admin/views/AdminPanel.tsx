@@ -26,9 +26,13 @@ import {
     ChevronDown,
     Search,
     Bell,
-    Sparkles
+    Sparkles,
+    Landmark,
+    Lock
 } from 'lucide-react';
 import {
+    FinanceHubTab,
+    EscrowWalletsTab,
     DashboardTab,
     TournamentsTab,
     OrgApprovalsTab,
@@ -85,8 +89,8 @@ const DEPARTMENTS: AdminDepartment[] = [
         id: 'finance',
         label: 'Financial Ops',
         icon: DollarSign,
-        defaultTab: 'tab-pending-deposits',
-        description: 'Deposit slips, cashouts, withdrawal limits & audit logs'
+        defaultTab: 'tab-finance-hub',
+        description: 'Treasury liquidity, escrow vaults, deposit slips & cashouts'
     },
     {
         id: 'organizers',
@@ -167,10 +171,26 @@ const AdminPanel: React.FC = () => {
 
         // 2. Financial Operations
         {
+            id: 'tab-finance-hub',
+            label: 'Treasury Command Center',
+            shortLabel: 'Treasury',
+            description: 'Platform financial health, circulating liquidity, reserves & revenue split',
+            department: 'finance',
+            icon: Landmark
+        },
+        {
+            id: 'tab-escrow-wallets',
+            label: 'Locked Escrow Wallets',
+            shortLabel: 'Escrow Vaults',
+            description: 'Independent tournament & scrim escrow vaults securing entry fees & prize funds',
+            department: 'finance',
+            icon: Lock
+        },
+        {
             id: 'tab-pending-deposits',
             label: 'Pending Deposits',
             shortLabel: 'Deposits',
-            description: 'Verify payment slips and credit player wallet balances',
+            description: 'Anti-fraud slip verification & player balance crediting',
             department: 'finance',
             icon: ArrowDown,
             badge: pendingDepositsCount,
@@ -180,8 +200,8 @@ const AdminPanel: React.FC = () => {
         {
             id: 'tab-pending-withdrawals',
             label: 'Pending Withdrawals',
-            shortLabel: 'Withdrawals',
-            description: 'Process player cashouts to eSewa, Khalti & Bank accounts',
+            shortLabel: 'Cashouts',
+            description: 'Process player cashouts with bank/wallet transfer reference logging',
             department: 'finance',
             icon: ArrowUp,
             badge: pendingWithdrawalsCount,
@@ -190,9 +210,9 @@ const AdminPanel: React.FC = () => {
         },
         {
             id: 'tab-tx-history',
-            label: 'Transaction History',
-            shortLabel: 'Transactions',
-            description: 'Complete audit log of wallet credits, debits & fee deductions',
+            label: 'Master Audit Ledger',
+            shortLabel: 'Audit Ledger',
+            description: 'Complete audit log of wallet credits, debits, escrow locks & CSV export',
             department: 'finance',
             icon: CreditCard
         },
@@ -611,6 +631,8 @@ const AdminPanel: React.FC = () => {
                 {activeTab === 'tab-users' && <TabErrorBoundary tabName="Users Tab"><UsersTab {...tabProps} /></TabErrorBoundary>}
                 {activeTab === 'tab-organizers' && <TabErrorBoundary tabName="Organizers Tab"><OrganizersTab {...tabProps} /></TabErrorBoundary>}
                 {activeTab === 'tab-org-earnings' && <TabErrorBoundary tabName="Org Earnings Tab"><OrgEarningsTab {...tabProps} /></TabErrorBoundary>}
+                {activeTab === 'tab-finance-hub' && <TabErrorBoundary tabName="Finance Hub Tab"><FinanceHubTab {...tabProps} setActiveTab={setActiveTab} setSelectedTx={setSelectedTx} /></TabErrorBoundary>}
+                {activeTab === 'tab-escrow-wallets' && <TabErrorBoundary tabName="Escrow Wallets Tab"><EscrowWalletsTab {...tabProps} setActiveTab={setActiveTab} /></TabErrorBoundary>}
                 {activeTab === 'tab-pending-deposits' && <TabErrorBoundary tabName="Pending Deposits Tab"><PendingDepositsTab {...tabProps} /></TabErrorBoundary>}
                 {activeTab === 'tab-pending-withdrawals' && <TabErrorBoundary tabName="Pending Withdrawals Tab"><PendingWithdrawalsTab {...tabProps} /></TabErrorBoundary>}
                 {activeTab === 'tab-tx-history' && (
