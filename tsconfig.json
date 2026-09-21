@@ -24,6 +24,6 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["src/**/*", "firebase-applet-config.json"],
+  "include": ["src/**/*", "api/**/*", "firebase-applet-config.json"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
 }

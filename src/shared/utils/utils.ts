@@ -6,6 +6,12 @@ export const formatCurrency = (amount: number | string, prefix: string = 'Rs. ')
     return `${num < 0 ? '-' : ''}${prefix}${new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(Math.abs(num))}`;
 };
 
+export const formatCurrencyExact = (amount: number | string, prefix: string = 'Rs. ') => {
+    const num = Number(amount);
+    if (amount === null || amount === undefined || isNaN(num)) return `${prefix}0`;
+    return `${num < 0 ? '-' : ''}${prefix}${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Math.abs(num))}`;
+};
+
 type FirestoreTimestamp = { seconds: number; nanoseconds: number; toDate?: () => Date };
 type TimestampInput = import('firebase/firestore').Timestamp | FirestoreTimestamp | Date | string | number | null | undefined;
 

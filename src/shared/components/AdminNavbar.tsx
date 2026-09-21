@@ -49,15 +49,17 @@ export const AdminNavbar: React.FC = () => {
                         </div>
                     </Link>
 
-                    <nav className="hidden md:flex items-center gap-2">
-                        <Link 
-                            to="/admin" 
-                            className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition flex items-center gap-1.5 bg-brand-600/20 text-brand-400 border border-brand-500/30"
-                        >
-                            <Shield className="w-3.5 h-3.5" />
-                            <span>Platform Controls</span>
-                        </Link>
-                    </nav>
+                    {profile?.role === 'admin' && (
+                        <nav className="hidden md:flex items-center gap-2">
+                            <Link 
+                                to="/admin" 
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition flex items-center gap-1.5 bg-brand-600/20 text-brand-400 border border-brand-500/30"
+                            >
+                                <Shield className="w-3.5 h-3.5" />
+                                <span>Platform Controls</span>
+                            </Link>
+                        </nav>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-3">

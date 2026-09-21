@@ -1,5 +1,6 @@
 import React from 'react';
-import {Users, X, Edit, Megaphone, Trophy} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {Users, X, Edit, Megaphone, Trophy, Settings} from 'lucide-react';
 
 import { AdminPanelTabProps } from './types';
 
@@ -42,38 +43,50 @@ export const OrgTournamentsTab: React.FC<AdminPanelTabProps> = (props) => {
                                                     {t.status}
                                                 </span>
                                                 <div className="flex gap-1">
+                                                    <Link 
+                                                        to={`/tournaments/${t.id}/admin`}
+                                                        className="p-1.5 min-w-[36px] min-h-[36px] bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white rounded-lg transition-colors border border-purple-500/30 flex items-center justify-center"
+                                                        title="Manage Tournament (Control Room)"
+                                                        aria-label={`Manage tournament ${t.title}`}
+                                                    >
+                                                        <Settings className="w-3.5 h-3.5" />
+                                                    </Link>
                                                     <button type="button" 
                                                         onClick={() => handleViewParticipants(t)}
-                                                        className="p-1.5 bg-brand-600/20 hover:bg-brand-600 text-brand-500 hover:text-white rounded-lg transition-colors border border-brand-500/30"
+                                                        className="p-1.5 min-w-[36px] min-h-[36px] bg-brand-600/20 hover:bg-brand-600 text-brand-500 hover:text-white rounded-lg transition-colors border border-brand-500/30 flex items-center justify-center"
                                                         title="View Participants"
+                                                        aria-label={`View participants for ${t.title}`}
                                                     >
-                                                        <Users className="w-3 h-3" />
+                                                        <Users className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button type="button" 
                                                         onClick={() => handleEditTournament(t)}
-                                                        className="p-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg transition-colors border border-blue-500/30"
+                                                        className="p-1.5 min-w-[36px] min-h-[36px] bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg transition-colors border border-blue-500/30 flex items-center justify-center"
                                                         title="Edit Tournament"
+                                                        aria-label={`Edit tournament ${t.title}`}
                                                     >
-                                                        <Edit className="w-3 h-3" />
+                                                        <Edit className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button type="button" 
                                                         onClick={() => handleToggleFeatured(t)}
-                                                        className={`p-1.5 rounded-lg transition-colors border ${
+                                                        className={`p-1.5 min-w-[36px] min-h-[36px] rounded-lg transition-colors border flex items-center justify-center ${
                                                             t.isFeatured 
                                                                 ? 'bg-yellow-600/20 text-yellow-500 border-yellow-500/30 hover:bg-yellow-600 hover:text-white' 
                                                                 : 'bg-surface/20 text-gray-400 border-gray-500/30 hover:bg-surface hover:text-white'
                                                         }`}
                                                         title={t.isFeatured ? "Unfeature" : "Feature"}
+                                                        aria-label={t.isFeatured ? `Unfeature ${t.title}` : `Feature ${t.title}`}
                                                     >
-                                                        <Megaphone className="w-3 h-3" />
+                                                        <Megaphone className="w-3.5 h-3.5" />
                                                     </button>
                                                     {t.status !== 'cancelled' && t.status !== 'completed' && (
                                                         <button type="button" 
                                                             onClick={() => handleCancelTournament(t)}
-                                                            className="p-1.5 bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white rounded-lg transition-colors border border-red-500/30"
+                                                            className="p-1.5 min-w-[36px] min-h-[36px] bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white rounded-lg transition-colors border border-red-500/30 flex items-center justify-center"
                                                             title="Cancel Tournament"
+                                                            aria-label={`Cancel tournament ${t.title}`}
                                                         >
-                                                            <X className="w-3 h-3" />
+                                                            <X className="w-3.5 h-3.5" />
                                                         </button>
                                                     )}
                                                 </div>

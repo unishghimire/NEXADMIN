@@ -40,10 +40,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 </button>
                 <button
                     type="button"
-                    onClick={() => {
-                        onConfirm();
-                        onCancel();
-                    }}
+                    onClick={onConfirm}
                     disabled={isLoading}
                     className={`px-4 py-3 text-white rounded-lg touch-target font-bold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
                         isDestructive ? 'bg-red-600 hover:bg-red-500' : 'bg-brand-600 hover:bg-brand-500'

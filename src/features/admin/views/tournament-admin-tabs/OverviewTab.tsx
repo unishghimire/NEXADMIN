@@ -3,8 +3,8 @@ import { motion } from 'motion/react';
 import { RotateCcw, DollarSign, TrendingUp, TrendingDown, Play, Pause, Send } from 'lucide-react';
 import { formatCurrency } from '../../../../shared/utils/utils';
 import { TournamentAdminTabProps } from './types';
-import { TournamentRoadmap } from '../../../tournaments/components/TournamentRoadmap';
-import { QualificationPanel } from '../../../tournaments/components/QualificationPanel';
+import { TournamentRoadmap } from '../../components/TournamentRoadmap';
+import { QualificationPanel } from '../../components/QualificationPanel';
 import { isRoundComplete } from '../../../../shared/services/tournamentEngine';
 
 export const OverviewTab: React.FC<TournamentAdminTabProps> = (props) => {

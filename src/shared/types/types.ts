@@ -7,12 +7,6 @@ export interface UserProfile {
     username: string;
     role: 'player' | 'organizer' | 'admin';
     isPowerOrganizer?: boolean;
-    isPowerOrg?: boolean;
-    orgTier?: 'standard' | 'power';
-    powerOrgApplicationStatus?: 'none' | 'pending' | 'approved' | 'rejected';
-    powerOrgAppliedAt?: Timestamp | any;
-    powerOrgApprovedAt?: Timestamp | any;
-    completedScrimsCount?: number;
     balance: number;
     totalEarnings: number;
     xp: number;
@@ -50,6 +44,11 @@ export interface UserProfile {
     orgPendingEarnings?: number;
     orgWalletBalance?: number;
     reservedBalance?: number;
+    isPowerOrg?: boolean;
+    orgTier?: 'standard' | 'power';
+    powerOrgApplicationStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+    powerOrgAppliedAt?: Timestamp | any;
+    completedScrimsCount?: number;
     stats?: {
         totalMatches: number;
         wins: number;
@@ -231,6 +230,9 @@ export interface Scrim {
     prizePool?: number;
     currentSlots?: number;
     matchType?: 'scrims' | 'tournament';
+    scrimMode?: 'STANDARD' | 'PER_KILL';
+    rewardPerKill?: number;
+    minimumKillsForReward?: number;
 }
 
 export interface Tournament {
@@ -245,6 +247,7 @@ export interface Tournament {
     entryFee: number;
     slots: number;
     currentPlayers: number;
+    currentParticipants?: number;
     type: string;
     matchType?: 'scrims' | 'tournament';
     scheduleType?: 'auto' | 'manual';
@@ -279,6 +282,10 @@ export interface Tournament {
     requiredFunding?: number;
     reservedFunding?: number;
     fundingReservedAt?: Timestamp | any;
+    lockedMoney?: number;
+    escrowBalance?: number;
+    collectedFees?: number;
+    collectedEntryFees?: number;
     // ─── Engine fields (optional, backward compat) ───
     participantMode?: 'team' | 'solo';
     // Frozen scoring snapshot — inherited from game at creation, never changes
@@ -507,7 +514,7 @@ export interface DiscordWebhooksConfig {
 
 export interface SiteSettings {
     minWithdrawal: number;
-    platformCommission?: number;
+    platformCommissionPercent?: number;
     supportEmail: string;
     supportPhone: string;
     notice: string;
@@ -519,6 +526,7 @@ export interface SiteSettings {
     discordWebhookTournaments?: string;
     discordWebhookScrims?: string;
     autoDiscordTournamentAnnouncements?: boolean;
+    minAuthenticScrimsForPowerOrg?: number;
     updatedAt: Timestamp | any;
 }
 
@@ -608,6 +616,7 @@ export interface TournamentEarning {
     profit: number;
     orgShare: number;
     nexplayShare: number;
+    platformCommissionPercent?: number;
     status: 'pending' | 'released' | 'no_earnings';
     createdAt: Timestamp | any;
     releasedAt?: Timestamp | any;
@@ -622,8 +631,9 @@ export interface PowerOrgApplication {
     phone?: string;
     whatsapp?: string;
     communityLink?: string;
-    completedScrimsCount: number;
+    proofLink?: string;
     notes?: string;
+    completedScrimsCount: number;
     status: 'pending' | 'approved' | 'rejected';
     appliedAt: Timestamp | any;
     reviewedAt?: Timestamp | any;

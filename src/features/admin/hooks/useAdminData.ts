@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, orderBy, limit, setDoc, serverTimestamp, getDoc, writeBatch, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, orderBy, limit, setDoc, serverTimestamp, getDoc, writeBatch, Timestamp, increment } from 'firebase/firestore';
 import { db, auth } from '../../../shared/config/firebase';
 import { useAuth } from '../../../shared/context/AuthContext';
-import { Transaction, UserProfile, Slide, PromoCode, Game, PaymentMethod, PaymentCategory, SiteSettings, DiscordWebhooksConfig, OrgApplication, PowerOrgApplication, Tournament, TournamentEarning } from '../../../shared/types/types';
+import { Transaction, UserProfile, Slide, PromoCode, Game, PaymentMethod, PaymentCategory, SiteSettings, DiscordWebhooksConfig, OrgApplication, Tournament, TournamentEarning, PowerOrgApplication } from '../../../shared/types/types';
 import { GameScoringConfig } from '../../../shared/types/scoring';
 import { DEFAULT_BANNER, NEXPLAY_LOGO } from '../../../shared/constants/constants';
 import { ImageUploader } from '../../../shared/components/ImageUploader';
-import { formatCurrency, formatDate, formatGameName, toDateSafe } from '../../../shared/utils/utils';
+import { formatCurrency, formatCurrencyExact, formatDate, formatGameName, toDateSafe } from '../../../shared/utils/utils';
 import { NotificationService } from '../../../shared/services/NotificationService';
 import { useInvisibleImage } from '../../../shared/hooks/useInvisibleImage';
 import { MediaCategory, deleteImage } from '../../../shared/services/mediaService';
+import { adminApiClient } from '../../../shared/services/adminApiClient';
 
 export function useAdminData(showToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void) {
     const { profile } = useAuth();
@@ -82,7 +83,8 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
 
     // Settings State
     const [minWithdrawal, setMinWithdrawal] = useState('');
-    const [platformCommission, setPlatformCommission] = useState('15');
+    const [platformCommissionPercent, setPlatformCommissionPercent] = useState<number>(15);
+    const [minAuthenticScrimsForPowerOrg, setMinAuthenticScrimsForPowerOrg] = useState<number>(20);
     const [supportEmail, setSupportEmail] = useState('');
     const [supportPhone, setSupportPhone] = useState('');
     const [notice, setNotice] = useState('');
@@ -354,7 +356,8 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
                 const data = results[13].value.data() as SiteSettings;
                 setSiteSettings(data);
                 setMinWithdrawal(data.minWithdrawal?.toString() || '');
-                setPlatformCommission(data.platformCommission !== undefined ? data.platformCommission.toString() : '15');
+                setPlatformCommissionPercent(data.platformCommissionPercent !== undefined ? Number(data.platformCommissionPercent) : 15);
+                setMinAuthenticScrimsForPowerOrg(data.minAuthenticScrimsForPowerOrg !== undefined ? Number(data.minAuthenticScrimsForPowerOrg) : 20);
                 setSupportEmail(data.supportEmail || '');
                 setSupportPhone(data.supportPhone || '');
                 setNotice(data.notice || '');
@@ -397,14 +400,14 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
                 }
             }
 
-            if (results[15]?.status === 'fulfilled') {
-                const powerApps = ((results[15].value as any).docs || []).map((d: any) => ({ id: d.id, ...d.data() } as PowerOrgApplication));
-                powerApps.sort((a: any, b: any) => {
-                    const aTime = toDateSafe(a.appliedAt || a.timestamp)?.getTime() || 0;
-                    const bTime = toDateSafe(b.appliedAt || b.timestamp)?.getTime() || 0;
+            if (results[15] && results[15].status === 'fulfilled') {
+                let pApps = results[15].value.docs.map(d => ({ id: d.id, ...d.data() } as PowerOrgApplication));
+                pApps.sort((a, b) => {
+                    const aTime = toDateSafe(a.appliedAt)?.getTime() || 0;
+                    const bTime = toDateSafe(b.appliedAt)?.getTime() || 0;
                     return bTime - aTime;
                 });
-                setPowerOrgApplications(powerApps);
+                setPowerOrgApplications(pApps);
             }
 
             // Calculate stats
@@ -488,24 +491,9 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         setSelectedTx(null);
     }, [activeTab]);
 
-    // Server-side money operations (BUG-031) — deposit approval, refunds,
-    // rejection, balance adjustments, and earnings release all run on the
-    // server with atomic transactions + server-authored audit records.
-    const adminPost = async (path: string, body: object) => {
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) throw new Error('Authentication required');
-        const response = await fetch(path, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify(body) });
-        const result = await response.json();
-        if (!response.ok || !result.success) throw new Error(result.message || 'Request failed');
-        return result;
-    };
-
     const handleApproveTx = async (tx: Transaction) => {
         try {
-            await adminPost('/api/admin/transactions/approve', { transactionId: tx.id });
+            await adminApiClient.approveTransaction(tx.id);
 
             // Send Notification
             await NotificationService.create(
@@ -538,7 +526,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             message: `Are you sure you want to refund ${formatCurrency(Math.abs(tx.amount))} to ${tx.username}? This will add the amount back to their wallet balance.`,
             onConfirm: async () => {
                 try {
-                    await adminPost('/api/admin/transactions/refund', { transactionId: tx.id });
+                    await adminApiClient.refundTransaction(tx.id, 'Refunded by admin');
 
                     // Send Notification
                     await NotificationService.create(
@@ -562,7 +550,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
 
     const executeRejectTx = async (tx: Transaction, reason: string) => {
         try {
-            await adminPost('/api/admin/transactions/reject', { transactionId: tx.id, reason: reason || 'Rejected by admin' });
+            await adminApiClient.rejectTransaction(tx.id, reason || 'Rejected by admin');
 
             // Send Notification
             await NotificationService.create(
@@ -607,73 +595,52 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         const amount = parseFloat(adjustmentAmount);
         if (isNaN(amount) || amount <= 0) return showToast('Invalid amount', 'error');
 
-        try {
-            const finalAmount = adjustmentType === 'add' ? amount : -amount;
-            // Server-side balance adjustment (BUG-031) — atomic transaction +
-            // ledger entry + audit record on the server.
-            await adminPost('/api/admin/balance/adjust', {
-                userId: selectedUser.uid,
-                amount,
-                type: adjustmentType,
-                desc: `Admin Adjustment: ${adjustmentType === 'add' ? 'Added' : 'Subtracted'} ${amount}` });
+        const balanceType = adjustmentType === 'add' ? 'credit' : 'debit';
+        const actionLabel = adjustmentType === 'add' ? 'Add' : 'Subtract';
 
-            showToast('Balance Adjusted', 'success');
-            setUsers(prev => prev.map(u => u.uid === selectedUser.uid ? { ...u, balance: u.balance + finalAmount } : u));
-            setSelectedUser(null);
-            setAdjustmentAmount('');
-        } catch (error) {
-            // Error adjusting balance
-            showToast(error.message || 'Failed to adjust balance', 'error');
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: `Confirm Balance Adjustment`,
+            message: `Are you sure you want to ${actionLabel.toLowerCase()} Rs. ${amount} ${adjustmentType === 'add' ? 'to' : 'from'} ${selectedUser.username}'s balance?`,
+            isDestructive: adjustmentType === 'subtract',
+            onConfirm: async () => {
+                closeConfirmModal();
+                try {
+                    const finalAmount = adjustmentType === 'add' ? amount : -amount;
+                    await adminApiClient.adjustBalance(
+                        selectedUser.uid,
+                        amount,
+                        balanceType,
+                        `Admin Adjustment: ${actionLabel}ed ${amount}`
+                    );
+
+                    showToast('Balance Adjusted', 'success');
+                    setUsers(prev => prev.map(u => u.uid === selectedUser.uid ? { ...u, balance: (u.balance || 0) + finalAmount } : u));
+                    setSelectedUser(null);
+                    setAdjustmentAmount('');
+                } catch (error: any) {
+                    showToast(error.message || 'Failed to adjust balance', 'error');
+                }
+            }
+        });
     };
 
     const handleApproveOrg = async (app: OrgApplication) => {
         try {
-            const batch = writeBatch(db);
-            const appRef = doc(db, 'orgApplications', app.id);
-            const userRef = doc(db, 'users', app.userId);
-            const publicUserRef = doc(db, 'users_public', app.userId);
+            await adminApiClient.approveStandardOrg(app.id);
 
-            batch.update(userRef, { 
+            showToast('Application Approved', 'success');
+            setOrgApplications(prev => prev.filter(a => a.id !== app.id));
+            setOrganizers(prev => prev.map(o => o.uid === app.userId ? {
+                ...o,
                 role: 'organizer',
                 orgStatus: 'approved',
                 orgName: app.orgName,
                 isOrganizer: true
-            });
-            batch.update(appRef, { status: 'approved' });
-            batch.set(publicUserRef, {
-                role: 'organizer',
-                orgName: app.orgName,
-                updatedAt: serverTimestamp() }, { merge: true });
-            
-            await batch.commit();
-
-            // Sync custom claims to Firebase Auth
-            try {
-                const token = await auth.currentUser?.getIdToken();
-                if (token) {
-                    await fetch('/api/admin/set-claims', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ uid: app.userId, role: 'organizer' }) });
-                }
-            } catch (claimsErr) {
-                console.error('Failed to sync custom claims for org approval:', claimsErr);
-            }
-
-            await NotificationService.create(
-                app.userId,
-                'Organizer Application Approved',
-                `Congratulations! Your application for ${app.orgName} has been approved. You can now host tournaments.`,
-                'success',
-                '/organizer-panel'
-            );
-
-            showToast('Application Approved', 'success');
-            setOrgApplications(prev => prev.filter(a => a.id !== app.id));
-        } catch (error) {
+            } : o));
+        } catch (error: any) {
             console.error("Error approving org:", error);
-            showToast('Failed to approve application', 'error');
+            showToast(error.message || 'Failed to approve application', 'error');
         }
     };
 
@@ -685,27 +652,15 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             isDestructive: true,
             onConfirm: async () => {
                 try {
-                    const token = await auth.currentUser?.getIdToken();
-                    if (!token) throw new Error('Authentication required');
-                    let cursor: string | null = null;
-                    do {
-                        const response = await fetch('/api/wallet/cancel-tournament', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({ tournamentId: tournament.id, ...(cursor ? { lastParticipantId: cursor } : {}) }) });
-                        const result = await response.json();
-                        if (!response.ok || !result.success) throw new Error(result.message || 'Failed to cancel tournament');
-                        cursor = result.hasMore ? result.nextParticipantId : null;
-                    } while (cursor);
+                    await adminApiClient.cancelTournament(tournament.id, 'Cancelled by admin');
                     showToast('Tournament cancelled and refunds processed', 'success');
                     
-                    // Refresh tournaments if needed
                     if (selectedOrgId) {
                         fetchOrgTournaments(selectedOrgId);
                     }
-                } catch (error) {
+                } catch (error: any) {
                     console.error("Error cancelling tournament:", error);
-                    showToast('Failed to cancel tournament', 'error');
+                    showToast(error.message || 'Failed to cancel tournament', 'error');
                 } finally {
                     closeConfirmModal();
                 }
@@ -715,147 +670,47 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
 
     const handleRejectOrg = async (app: OrgApplication) => {
         try {
-            const batch = writeBatch(db);
-            const appRef = doc(db, 'orgApplications', app.id);
-            const userRef = doc(db, 'users', app.userId);
-
-            batch.update(userRef, { orgStatus: 'rejected' });
-            batch.update(appRef, { status: 'rejected' });
-            
-            await batch.commit();
-
-            // Sync custom claims to Firebase Auth
-            try {
-                const token = await auth.currentUser?.getIdToken();
-                if (token) {
-                    await fetch('/api/admin/set-claims', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ uid: app.userId, role: 'player' }),
-                    });
-                }
-            } catch (claimsErr) {
-                console.error('Failed to sync custom claims for org approval:', claimsErr);
-            }
-
-            await NotificationService.create(
-                app.userId,
-                'Organizer Application Rejected',
-                `We regret to inform you that your application for ${app.orgName} was rejected.`,
-                'alert',
-                '/contact'
-            );
+            await adminApiClient.rejectOrg(app.id, 'Application rejected by admin', false);
 
             showToast('Application Rejected', 'success');
             setOrgApplications(prev => prev.filter(a => a.id !== app.id));
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error rejecting org:", error);
-            showToast('Failed to reject application', 'error');
+            showToast(error.message || 'Failed to reject application', 'error');
         }
     };
 
     const handleApprovePowerOrg = async (app: PowerOrgApplication) => {
         try {
-            const batch = writeBatch(db);
-            const appRef = doc(db, 'power_org_applications', app.id);
-            const userRef = doc(db, 'users', app.userId);
-            const publicUserRef = doc(db, 'users_public', app.userId);
-            const adminUid = auth.currentUser?.uid || 'admin';
+            await adminApiClient.approvePowerOrg(app.id);
 
-            batch.update(userRef, {
+            logAdminAction('APPROVE_POWER_ORG', `Approved Power Org status for ${app.orgName} (${app.userId})`);
+            showToast(`Approved ${app.orgName} as Power Organizer`, 'success');
+            setPowerOrgApplications(prev => prev.filter(a => a.id !== app.id));
+            setOrganizers(prev => prev.map(o => o.uid === app.userId ? {
+                ...o,
                 isPowerOrganizer: true,
                 isPowerOrg: true,
                 orgTier: 'power',
-                powerOrgApplicationStatus: 'approved',
-                powerOrgApprovedAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-            });
-
-            batch.update(appRef, {
-                status: 'approved',
-                reviewedAt: serverTimestamp(),
-                reviewedBy: adminUid,
-            });
-
-            batch.set(publicUserRef, {
-                isPowerOrganizer: true,
-                isPowerOrg: true,
-                orgTier: 'power',
-                updatedAt: serverTimestamp(),
-            }, { merge: true });
-
-            await batch.commit();
-
-            await logAdminAction(
-                'APPROVE_POWER_ORGANIZER',
-                `Approved Power Organizer status for ${app.orgName} (${app.username}) with ${app.completedScrimsCount} verified completed scrims`
-            );
-
-            try {
-                await NotificationService.create(
-                    app.userId,
-                    'Power Organizer Status Granted!',
-                    `Congratulations! Your application for Power Organizer status has been approved. You now have full access to create and host official tournaments on Nexplay!`,
-                    'success',
-                    '/organizer-panel'
-                );
-            } catch (notifyErr) {
-                console.warn('Failed to send power org approval notification:', notifyErr);
-            }
-
-            showToast(`Power Organizer status approved for ${app.orgName || app.username}!`, 'success');
-            setPowerOrgApplications(prev => prev.map(a => a.id === app.id ? { ...a, status: 'approved', reviewedAt: new Date(), reviewedBy: adminUid } : a));
-            setOrganizers(prev => prev.map(o => o.uid === app.userId ? { ...o, isPowerOrganizer: true, isPowerOrg: true, orgTier: 'power', powerOrgApplicationStatus: 'approved' } : o));
+                powerOrgApplicationStatus: 'approved'
+            } : o));
         } catch (error: any) {
             console.error("Error approving power org:", error);
             showToast(error.message || 'Failed to approve Power Organizer application', 'error');
         }
     };
 
-    const handleRejectPowerOrg = async (app: PowerOrgApplication, adminNotes?: string) => {
+    const handleRejectPowerOrg = async (app: PowerOrgApplication) => {
         try {
-            const batch = writeBatch(db);
-            const appRef = doc(db, 'power_org_applications', app.id);
-            const userRef = doc(db, 'users', app.userId);
-            const adminUid = auth.currentUser?.uid || 'admin';
+            await adminApiClient.rejectOrg(app.id, 'Application rejected by admin', true);
 
-            batch.update(userRef, {
-                powerOrgApplicationStatus: 'rejected',
-                isPowerOrganizer: false,
-                isPowerOrg: false,
-                orgTier: 'standard',
-                updatedAt: serverTimestamp(),
-            });
-
-            batch.update(appRef, {
-                status: 'rejected',
-                reviewedAt: serverTimestamp(),
-                reviewedBy: adminUid,
-                ...(adminNotes ? { adminNotes } : {}),
-            });
-
-            await batch.commit();
-
-            await logAdminAction(
-                'REJECT_POWER_ORGANIZER',
-                `Rejected Power Organizer application for ${app.orgName} (${app.username}). Reason: ${adminNotes || 'Requirements not satisfied'}`
-            );
-
-            try {
-                await NotificationService.create(
-                    app.userId,
-                    'Power Organizer Application Update',
-                    `Your application for Power Organizer status was reviewed. At this time, it was not approved. Continue hosting authentic scrims to re-qualify.`,
-                    'info',
-                    '/organizer-panel'
-                );
-            } catch (notifyErr) {
-                console.warn('Failed to send power org rejection notification:', notifyErr);
-            }
-
-            showToast(`Power Organizer application rejected`, 'info');
-            setPowerOrgApplications(prev => prev.map(a => a.id === app.id ? { ...a, status: 'rejected', reviewedAt: new Date(), reviewedBy: adminUid } : a));
-            setOrganizers(prev => prev.map(o => o.uid === app.userId ? { ...o, isPowerOrganizer: false, isPowerOrg: false, orgTier: 'standard', powerOrgApplicationStatus: 'rejected' } : o));
+            logAdminAction('REJECT_POWER_ORG', `Rejected Power Org application for ${app.orgName} (${app.userId})`);
+            showToast(`Rejected Power Org application for ${app.orgName}`, 'info');
+            setPowerOrgApplications(prev => prev.filter(a => a.id !== app.id));
+            setOrganizers(prev => prev.map(o => o.uid === app.userId ? {
+                ...o,
+                powerOrgApplicationStatus: 'rejected'
+            } : o));
         } catch (error: any) {
             console.error("Error rejecting power org:", error);
             showToast(error.message || 'Failed to reject Power Organizer application', 'error');
@@ -1291,7 +1146,8 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         try {
             const settingsData = {
                 minWithdrawal: parseFloat(minWithdrawal),
-                platformCommission: parseFloat(platformCommission) || 15,
+                platformCommissionPercent: Math.min(100, Math.max(0, Number(platformCommissionPercent) || 15)),
+                minAuthenticScrimsForPowerOrg: Math.max(1, Number(minAuthenticScrimsForPowerOrg) || 20),
                 supportEmail,
                 supportPhone,
                 notice,
@@ -1303,97 +1159,13 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
                 discordWebhookTournaments: (discordWebhooks.tournaments?.announcement || discordWebhookTournaments || '').trim(),
                 discordWebhookScrims: (discordWebhooks.scrims?.announcement || '').trim(),
                 autoDiscordTournamentAnnouncements: discordWebhooks.autoAnnounce?.tournaments ?? autoDiscordTournamentAnnouncements,
-                updatedAt: serverTimestamp()
             };
-            await setDoc(doc(db, 'settings', 'site'), settingsData);
+            await adminApiClient.updateSettings(settingsData);
             setSiteSettings(settingsData as any);
             showToast('Settings Saved', 'success');
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error saving settings:", error);
-            showToast('Failed to save settings', 'error');
-        }
-    };
-
-    const handleSaveFinancial = async () => {
-        try {
-            const financialData = {
-                minWithdrawal: parseFloat(minWithdrawal) || 0,
-                platformCommission: parseFloat(platformCommission) || 15,
-                updatedAt: serverTimestamp()
-            };
-            await setDoc(doc(db, 'settings', 'site'), financialData, { merge: true });
-            setSiteSettings(prev => ({ ...(prev || {}), ...financialData } as any));
-            showToast('Financial & commission settings saved!', 'success');
-        } catch (error) {
-            console.error("Error saving financial settings:", error);
-            showToast('Failed to save financial settings', 'error');
-        }
-    };
-
-    const handleSavePlatform = async () => {
-        try {
-            const platformData = {
-                maintenanceMode,
-                notice,
-                isNoticeActive,
-                updatedAt: serverTimestamp()
-            };
-            await setDoc(doc(db, 'settings', 'site'), platformData, { merge: true });
-            setSiteSettings(prev => ({ ...(prev || {}), ...platformData } as any));
-            showToast('Platform status & notice settings saved!', 'success');
-        } catch (error) {
-            console.error("Error saving platform settings:", error);
-            showToast('Failed to save platform settings', 'error');
-        }
-    };
-
-    const handleSaveOrganizer = async () => {
-        try {
-            const organizerData = {
-                isOrgFormOpen: siteSettings?.isOrgFormOpen ?? true,
-                orgFormDescription,
-                updatedAt: serverTimestamp()
-            };
-            await setDoc(doc(db, 'settings', 'site'), organizerData, { merge: true });
-            setSiteSettings(prev => ({ ...(prev || {}), ...organizerData } as any));
-            showToast('Organizer portal settings saved!', 'success');
-        } catch (error) {
-            console.error("Error saving organizer settings:", error);
-            showToast('Failed to save organizer settings', 'error');
-        }
-    };
-
-    const handleSaveSupport = async () => {
-        try {
-            const supportData = {
-                supportEmail,
-                supportPhone,
-                updatedAt: serverTimestamp()
-            };
-            await setDoc(doc(db, 'settings', 'site'), supportData, { merge: true });
-            setSiteSettings(prev => ({ ...(prev || {}), ...supportData } as any));
-            showToast('Support & contact info saved!', 'success');
-        } catch (error) {
-            console.error("Error saving support info:", error);
-            showToast('Failed to save support info', 'error');
-        }
-    };
-
-    const handleSaveDiscord = async () => {
-        try {
-            const discordData = {
-                discordWebhooks,
-                discordWebhookTournaments: (discordWebhooks.tournaments?.announcement || discordWebhookTournaments || '').trim(),
-                discordWebhookScrims: (discordWebhooks.scrims?.announcement || '').trim(),
-                autoDiscordTournamentAnnouncements: discordWebhooks.autoAnnounce?.tournaments ?? autoDiscordTournamentAnnouncements,
-                updatedAt: serverTimestamp()
-            };
-            await setDoc(doc(db, 'settings', 'site'), discordData, { merge: true });
-            setSiteSettings(prev => ({ ...(prev || {}), ...discordData } as any));
-            showToast('Discord multi-webhook settings saved!', 'success');
-        } catch (error) {
-            console.error("Error saving discord webhooks:", error);
-            showToast('Failed to save discord webhooks', 'error');
+            showToast(error.message || 'Failed to save settings', 'error');
         }
     };
 
@@ -1401,44 +1173,40 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         try {
             const currentVal = siteSettings?.isOrgFormOpen ?? true;
             const newValue = !currentVal;
-            await setDoc(doc(db, 'settings', 'site'), { isOrgFormOpen: newValue }, { merge: true });
+            await adminApiClient.updateSettings({ isOrgFormOpen: newValue });
             setSiteSettings(prev => ({ ...(prev || {}), isOrgFormOpen: newValue } as any));
             showToast(`Organizer applications ${newValue ? 'opened' : 'closed'}`, 'success');
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error toggling org form:", error);
-            showToast('Failed to toggle form', 'error');
+            showToast(error.message || 'Failed to toggle form', 'error');
         }
     };
 
     const handleUpdateUserRole = async (uid: string, newRole: 'player' | 'organizer' | 'admin') => {
-        try {
-            // Update Firestore doc
-            await updateDoc(doc(db, 'users', uid), { role: newRole });
-            await setDoc(doc(db, 'users_public', uid), { role: newRole, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
-            // Sync custom claims to Firebase Auth (server-side admin call)
-            try {
-                const token = await auth.currentUser?.getIdToken();
-                if (token) {
-                    await fetch('/api/admin/set-claims', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ uid, role: newRole }) });
+        const targetUser = users.find(u => u.uid === uid);
+        const username = targetUser?.username || 'this user';
+        setConfirmModal({
+            isOpen: true,
+            title: 'Confirm Role Change',
+            message: `Are you sure you want to change ${username}'s role to ${newRole.toUpperCase()}? This modifies critical platform permissions.`,
+            isDestructive: newRole === 'admin',
+            onConfirm: async () => {
+                closeConfirmModal();
+                try {
+                    await adminApiClient.updateUserRole(uid, newRole, 'Updated by admin via portal');
+                    setUsers(prev => prev.map(u => u.uid === uid ? { ...u, role: newRole } : u));
+                    setOrganizers(prev => {
+                        const updated = prev.map(u => u.uid === uid ? { ...u, role: newRole } : u);
+                        if (newRole === 'player') return updated.filter(u => u.uid !== uid);
+                        return updated;
+                    });
+                    showToast(`User role updated to ${newRole}`, 'success');
+                } catch (error: any) {
+                    console.error("Error updating user role:", error);
+                    showToast(error.message || 'Failed to update role', 'error');
                 }
-            } catch (claimsErr) {
-                console.error('Failed to sync custom claims:', claimsErr);
-                // ponytail: Firestore doc is source of truth during migration — claims sync is best-effort
             }
-            setUsers(prev => prev.map(u => u.uid === uid ? { ...u, role: newRole } : u));
-            setOrganizers(prev => {
-                const updated = prev.map(u => u.uid === uid ? { ...u, role: newRole } : u);
-                if (newRole === 'player') return updated.filter(u => u.uid !== uid);
-                return updated;
-            });
-            showToast(`User role updated to ${newRole}`, 'success');
-        } catch (error) {
-            console.error("Error updating user role:", error);
-            showToast('Failed to update role', 'error');
-        }
+        });
     };
 
     const handleSaveOrgDetails = async () => {
@@ -1462,58 +1230,63 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
     };
 
     const handleSuspendOrg = async (uid: string, isSuspended: boolean) => {
-        try {
-            await updateDoc(doc(db, 'users', uid), { isBanned: isSuspended });
-            setOrganizers(prev => prev.map(o => o.uid === uid ? { ...o, isBanned: isSuspended } : o));
-            showToast(`Organizer ${isSuspended ? 'suspended' : 'activated'}`, 'success');
-        } catch (error) {
-            console.error("Error suspending org:", error);
-            showToast('Failed to update status', 'error');
-        }
+        const targetUser = users.find(u => u.uid === uid) || organizers.find(o => o.uid === uid);
+        const name = targetUser?.username || 'this user';
+        setConfirmModal({
+            isOpen: true,
+            title: isSuspended ? 'Confirm Account Suspension' : 'Confirm Account Reactivation',
+            message: `Are you sure you want to ${isSuspended ? 'suspend' : 'reactivate'} ${name}'s account? ${isSuspended ? 'They will be immediately blocked from accessing the platform.' : 'Their access will be restored.'}`,
+            isDestructive: isSuspended,
+            onConfirm: async () => {
+                closeConfirmModal();
+                try {
+                    if (isSuspended) {
+                        await adminApiClient.suspendUser(uid, 'Suspended by admin');
+                    } else {
+                        await adminApiClient.restoreUser(uid, 'Restored by admin');
+                    }
+                    setUsers(prev => prev.map(u => u.uid === uid ? { ...u, isBanned: isSuspended } : u));
+                    setOrganizers(prev => prev.map(o => o.uid === uid ? { ...o, isBanned: isSuspended } : o));
+                    showToast(`User ${isSuspended ? 'suspended' : 'activated'}`, 'success');
+                } catch (error: any) {
+                    console.error("Error suspending user/org:", error);
+                    showToast(error.message || 'Failed to update status', 'error');
+                }
+            }
+        });
     };
 
     const togglePowerOrganizer = async (org: UserProfile) => {
-        try {
-            const newStatus = !(org.isPowerOrganizer || org.isPowerOrg || org.orgTier === 'power');
-            const batch = writeBatch(db);
-            const userRef = doc(db, 'users', org.uid);
-            const publicUserRef = doc(db, 'users_public', org.uid);
+        const currentPower = Boolean(org.isPowerOrganizer || org.isPowerOrg || org.orgTier === 'power');
+        const newStatus = !currentPower;
+        const newTier: 'standard' | 'power' = newStatus ? 'power' : 'standard';
 
-            const updateData = {
-                isPowerOrganizer: newStatus,
-                isPowerOrg: newStatus,
-                orgTier: newStatus ? ('power' as const) : ('standard' as const),
-                ...(newStatus ? { powerOrgApprovedAt: serverTimestamp() } : {}),
-                updatedAt: serverTimestamp(),
-            };
+        setConfirmModal({
+            isOpen: true,
+            title: `${newStatus ? 'Grant' : 'Revoke'} Power Organizer Status`,
+            message: `Are you sure you want to ${newStatus ? 'grant Power Organizer status to' : 'revoke Power Organizer status from'} ${org.orgName || org.username}?`,
+            isDestructive: !newStatus,
+            onConfirm: async () => {
+                closeConfirmModal();
+                try {
+                    await adminApiClient.togglePowerOrg(org.uid, newStatus);
 
-            batch.update(userRef, updateData);
-            batch.set(publicUserRef, {
-                isPowerOrganizer: newStatus,
-                isPowerOrg: newStatus,
-                orgTier: newStatus ? 'power' : 'standard',
-                updatedAt: serverTimestamp(),
-            }, { merge: true });
+                    setOrganizers(prev => prev.map(o => o.uid === org.uid ? {
+                        ...o,
+                        isPowerOrganizer: newStatus,
+                        isPowerOrg: newStatus,
+                        orgTier: newTier,
+                        powerOrgApplicationStatus: newStatus ? 'approved' : 'none'
+                    } : o));
 
-            await batch.commit();
-
-            setOrganizers(prev => prev.map(o => o.uid === org.uid ? {
-                ...o,
-                isPowerOrganizer: newStatus,
-                isPowerOrg: newStatus,
-                orgTier: newStatus ? 'power' : 'standard'
-            } : o));
-
-            await logAdminAction(
-                newStatus ? 'GRANT_POWER_ORGANIZER' : 'REVOKE_POWER_ORGANIZER',
-                `${newStatus ? 'Granted' : 'Revoked'} Power Organizer status for ${org.orgName || org.username}`
-            );
-
-            showToast(`Organizer power ${newStatus ? 'granted' : 'revoked'}`, 'success');
-        } catch (error) {
-            console.error("Error toggling power organizer:", error);
-            showToast('Failed to update organizer power', 'error');
-        }
+                    logAdminAction('TOGGLE_POWER_ORG', `${newStatus ? 'Granted' : 'Revoked'} Power Organizer status for ${org.orgName || org.username} (${org.uid})`);
+                    showToast(`Organizer power ${newStatus ? 'granted' : 'revoked'}`, 'success');
+                } catch (error: any) {
+                    console.error("Error toggling power organizer:", error);
+                    showToast(error.message || 'Failed to update organizer power', 'error');
+                }
+            }
+        });
     };
 
     const executeDeleteGame = async (id: string) => {
@@ -1554,9 +1327,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             isDestructive: false,
             onConfirm: async () => {
                 try {
-                    // Server-side earnings release (BUG-031) — atomic transaction
-                    // that guards against double-release and writes the ledger + audit.
-                    await adminPost('/api/admin/earnings/release', { earningId: earning.id });
+                    await adminApiClient.releaseEarnings(earning.id);
                     
                     await NotificationService.create(
                         earning.orgId,
@@ -1588,37 +1359,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         const handleResolveDispute = async (disputeId: string, action: 'warn' | 'ban' | 'dismiss') => {
             if (!disputeId) return;
             try {
-                const user = auth.currentUser;
-                let resolvedViaApi = false;
-                if (user) {
-                    try {
-                        const token = await user.getIdToken();
-                        const res = await fetch(`/api/disputes/${disputeId}/resolve`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
-                            },
-                            body: JSON.stringify({ action })
-                        });
-                        const data = await res.json().catch(() => ({}));
-                        if (res.ok && data.success) {
-                            resolvedViaApi = true;
-                        }
-                    } catch (apiErr) {
-                        console.warn("API resolve dispute failed, falling back to direct Firestore:", apiErr);
-                    }
-                }
-
-                if (!resolvedViaApi) {
-                    const status = action === 'dismiss' ? 'dismissed' : 'resolved';
-                    await updateDoc(doc(db, 'disputes', disputeId), {
-                        status,
-                        resolutionAction: action,
-                        resolvedAt: serverTimestamp(),
-                        resolvedBy: profile?.uid || auth.currentUser?.uid || 'admin'
-                    });
-                }
+                await adminApiClient.resolveDispute(disputeId, action, `Admin resolved dispute with ${action}`);
 
                 const newStatus = action === 'dismiss' ? 'dismissed' : 'resolved';
                 setAllDisputes(prev => prev.map(d => d.id === disputeId ? {
@@ -1694,6 +1435,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             fetchMedia,
             fetchOrgTournaments,
             formatCurrency,
+            formatCurrencyExact,
             formatDate,
             formatGameName,
             gameLogo,
@@ -1704,8 +1446,6 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             handleApproveOrg,
             handleApprovePowerOrg,
             handleRejectPowerOrg,
-            powerOrgApplications,
-            pendingPowerOrgCount,
             handleApproveTx,
             handleCancelTournament,
             handleDeleteCategory,
@@ -1724,11 +1464,6 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             handleSavePayment,
             handleSavePromo,
             handleSaveSettings,
-            handleSaveFinancial,
-            handleSavePlatform,
-            handleSaveOrganizer,
-            handleSaveSupport,
-            handleSaveDiscord,
             handleSaveSlide,
             handleSuspendOrg,
             handleToggleFeatured,
@@ -1737,10 +1472,7 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             handleUnlockTournament,
             isCategoryModalOpen,
             isGameModalOpen,
-            isPaymentModalOpen,
-            isPromoModalOpen,
             isScoringModalOpen,
-            isSlideModalOpen,
             scoringModalGame,
             setScoringModalGame,
             setIsNoticeActive,
@@ -1755,11 +1487,13 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             mediaLoading,
             mediaSearch,
             minWithdrawal,
-            platformCommission,
+            platformCommissionPercent,
+            minAuthenticScrimsForPowerOrg,
             directUploadUrl,
             notice,
             openEditGame,
             orgApplications,
+            powerOrgApplications,
             orgDiscord,
             orgEmail,
             orgFormDescription,
@@ -1803,7 +1537,8 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
             setMediaFilter,
             setMediaSearch,
             setMinWithdrawal,
-            setPlatformCommission,
+            setPlatformCommissionPercent,
+            setMinAuthenticScrimsForPowerOrg,
             setDirectUploadUrl,
             setNotice,
             setOrgDiscord,
@@ -1882,8 +1617,6 @@ export function useAdminData(showToast: (message: string, type: 'success' | 'err
         pendingOrgCount,
         pendingPowerOrgCount,
         powerOrgApplications,
-        handleApprovePowerOrg,
-        handleRejectPowerOrg,
         pendingWithdrawalsCount,
         rejectionReason,
         selectedOrgId,

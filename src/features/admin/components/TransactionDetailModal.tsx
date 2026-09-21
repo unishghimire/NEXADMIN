@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, CreditCard, Layout, Info, Eye, Image as ImageIcon } from 'lucide-react';
 import { Transaction } from '../../../shared/types/types';
-import { formatCurrency, sanitizeUrl } from '../../../shared/utils/utils';
+import { formatCurrencyExact, sanitizeUrl } from '../../../shared/utils/utils';
 
 interface TransactionDetailModalProps {
     selectedTx: Transaction;
@@ -63,7 +63,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                         <div className="bg-dark p-5 rounded-2xl border border-slate-800 shadow-inner">
                             <div className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-3">Transaction Details</div>
                             <div className="flex items-end gap-3 mb-4">
-                                <div className="text-3xl font-black text-white tracking-tight">{formatCurrency(Math.abs(selectedTx.amount))}</div>
+                                <div className="text-3xl font-black text-white tracking-tight">{formatCurrencyExact(Math.abs(selectedTx.amount))}</div>
                                 <div className={`text-sm font-bold uppercase mb-1 ${selectedTx.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{selectedTx.type}</div>
                             </div>
                             <div className="space-y-2 text-sm font-mono">

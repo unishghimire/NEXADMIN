@@ -3,14 +3,6 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ═══════════════════════════════════════════════════════════════
-    // ADMIN BYPASS — uses Firebase Auth Custom Claims, not hardcoded UID.
-    // To set admin: admin.auth().setCustomUserClaims(uid, { role: 'admin' })
-    // ═══════════════════════════════════════════════════════════════
-    match /{document=**} {
-      allow read, write: if isAdmin();
-    }
-
-    // ═══════════════════════════════════════════════════════════════
     // GLOBAL HELPERS
     // ═══════════════════════════════════════════════════════════════
     function isValidId(id) {
@@ -30,7 +22,6 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.role == 'admin' ||
-        request.auth.token.email == 'nexplayorg@gmail.com' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
@@ -127,6 +118,15 @@ service cloud.firestore {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // AUDIT LOGS — immutable administrative audit trail
+    // ═══════════════════════════════════════════════════════════════
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false; // IMMUTABLE: cannot be altered or erased
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // SITE SETTINGS — public read, admin write
     // ═══════════════════════════════════════════════════════════════
     match /settings/{settingId} {
@@ -156,7 +156,7 @@ service cloud.firestore {
             'contactInfo', 'inGameId', 'inGameName', 'teamName', 'teamId',
             'whatsapp', 'discord', 'youtube', 'status', 'customActivity',
             'lastActive', 'updatedAt', 'skills', 'orgName', 'email',
-            'orgStatus', 'resultPresets',
+            'resultPresets',
             'youtubeUrl', 'twitchUrl',
             'refereeName', 'refereeEnabled', 'casterName', 'casterEnabled'
           ]) &&
@@ -364,7 +364,7 @@ service cloud.firestore {
     // ═══════════════════════════════════════════════════════════════
     match /transactions/{transactionId} {
       allow get:    if (isOwner(existing().userId) || isAdmin()) && isValidId(transactionId);
-      allow list:   if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list:   if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       // All creates/updates/deletes are server-side — Admin SDK bypasses rules
       allow create: if false;
       allow update, delete: if false;

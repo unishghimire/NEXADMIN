@@ -20,6 +20,7 @@ export type AdminPanelTabProps = Record<string, any> & {
     fetchMedia?: any;
     fetchOrgTournaments?: any;
     formatCurrency?: any;
+    formatCurrencyExact?: any;
     formatDate?: any;
     formatGameName?: any;
     gameLogo?: any;
@@ -78,6 +79,10 @@ export type AdminPanelTabProps = Record<string, any> & {
     minWithdrawal?: any;
     platformCommission?: any;
     setPlatformCommission?: any;
+    platformCommissionPercent?: any;
+    setPlatformCommissionPercent?: any;
+    minAuthenticScrimsForPowerOrg?: any;
+    setMinAuthenticScrimsForPowerOrg?: any;
     directUploadUrl?: any;
     notice?: any;
     openEditGame?: any;

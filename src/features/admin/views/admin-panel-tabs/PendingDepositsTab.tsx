@@ -31,6 +31,7 @@ export const PendingDepositsTab: React.FC<AdminPanelTabProps> = (props) => {
         users = [],
         closeConfirmModal, 
         formatCurrency, 
+        formatCurrencyExact,
         formatDate,
         getRelativeTime, 
         handleApproveTx, 
@@ -268,7 +269,7 @@ export const PendingDepositsTab: React.FC<AdminPanelTabProps> = (props) => {
                                                     COLLISION DETECTED: DUPLICATE {collision.field.toUpperCase()}
                                                 </div>
                                                 <p className="text-[11px] text-red-300/90 mt-0.5 leading-relaxed">
-                                                    Matched with TX #{collision.matchedTx.id.slice(0, 8)} for @{collision.matchedTx.username || 'user'} ({formatCurrency ? formatCurrency(collision.matchedTx.amount) : collision.matchedTx.amount} on {formatDate ? formatDate(collision.matchedTx.timestamp) : 'prior date'}).
+                                                    Matched with TX #{collision.matchedTx.id.slice(0, 8)} for @{collision.matchedTx.username || 'user'} ({(formatCurrencyExact || formatCurrency)(collision.matchedTx.amount)} on {formatDate ? formatDate(collision.matchedTx.timestamp) : 'prior date'}).
                                                     {collision.isAlreadyCredited && <span className="font-bold text-red-100 ml-1">ALREADY CREDITED!</span>}
                                                 </p>
                                             </div>
@@ -290,14 +291,14 @@ export const PendingDepositsTab: React.FC<AdminPanelTabProps> = (props) => {
                                                 <span>{t.username || userProfile?.username || 'Player'}</span>
                                                 {userProfile && (
                                                     <span className="text-[10px] font-normal text-slate-400 font-mono">
-                                                        (Bal: {formatCurrency ? formatCurrency(userProfile.balance) : `Rs. ${userProfile.balance}`})
+                                                        (Bal: {(formatCurrencyExact || formatCurrency)(userProfile.balance)})
                                                     </span>
                                                 )}
                                             </div>
                                             <div className="text-[10px] text-slate-400 font-mono">{getRelativeTime(t.timestamp)}</div>
                                         </div>
                                         <div className="text-xl font-black text-emerald-400 tracking-tight font-mono">
-                                            +{formatCurrency(Math.abs(t.amount))}
+                                            +{(formatCurrencyExact || formatCurrency)(Math.abs(t.amount))}
                                         </div>
                                     </div>
 

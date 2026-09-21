@@ -1,5 +1,6 @@
 import React from 'react';
-import {Users, X, Search, Edit, Megaphone, Trophy, Unlock} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {Users, X, Search, Edit, Megaphone, Trophy, Unlock, Settings} from 'lucide-react';
 
 import { AdminPanelTabProps } from './types';
 import { DEFAULT_BANNER } from '../../../../shared/constants/constants';
@@ -46,47 +47,60 @@ export const TournamentsTab: React.FC<AdminPanelTabProps> = (props) => {
                                                     {t.status}
                                                 </span>
                                                 <div className="flex gap-1">
+                                                    <Link 
+                                                        to={`/tournaments/${t.id}/admin`}
+                                                        className="p-2.5 min-w-[44px] min-h-[44px] bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white rounded-lg transition-colors border border-purple-500/30 flex items-center justify-center"
+                                                        title="Manage Tournament (Control Room)"
+                                                        aria-label={`Manage tournament ${t.title}`}
+                                                    >
+                                                        <Settings className="w-4 h-4" />
+                                                    </Link>
                                                     <button type="button" 
                                                         onClick={() => handleViewParticipants(t)}
-                                                        className="p-2.5 min-w-[44px] min-h-[44px] bg-brand-600/20 hover:bg-brand-600 text-brand-500 hover:text-white rounded-lg transition-colors border border-brand-500/30"
+                                                        className="p-2.5 min-w-[44px] min-h-[44px] bg-brand-600/20 hover:bg-brand-600 text-brand-500 hover:text-white rounded-lg transition-colors border border-brand-500/30 flex items-center justify-center"
                                                         title="View Participants"
+                                                        aria-label={`View participants for ${t.title}`}
                                                     >
                                                         <Users className="w-4 h-4" />
                                                     </button>
                                                     <button type="button" 
                                                         onClick={() => handleEditTournament(t)}
-                                                        className="p-2.5 min-w-[44px] min-h-[44px] bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg transition-colors border border-blue-500/30"
+                                                        className="p-2.5 min-w-[44px] min-h-[44px] bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg transition-colors border border-blue-500/30 flex items-center justify-center"
                                                         title="Edit Tournament"
+                                                        aria-label={`Edit tournament ${t.title}`}
                                                     >
                                                         <Edit className="w-4 h-4" />
                                                     </button>
                                                     <button type="button" 
                                                         onClick={() => handleUnlockTournament && handleUnlockTournament(t)}
-                                                        className={`p-2.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors border ${
+                                                        className={`p-2.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors border flex items-center justify-center ${
                                                             t.fundingStatus === 'RESERVED'
                                                                 ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600 hover:text-white'
                                                                 : 'bg-amber-500 hover:bg-amber-400 text-black border-amber-400 shadow-lg shadow-amber-500/20 font-black animate-pulse'
                                                         }`}
                                                         title={t.fundingStatus === 'RESERVED' ? "Funding Secured (Click to re-verify)" : "Click to Unlock Registration (Admin Escrow Bypass)"}
+                                                        aria-label={t.fundingStatus === 'RESERVED' ? `Funding Secured for ${t.title}` : `Unlock Registration for ${t.title}`}
                                                     >
                                                         <Unlock className="w-4 h-4" />
                                                     </button>
                                                     <button type="button" 
                                                         onClick={() => handleToggleFeatured(t)}
-                                                        className={`p-1.5 rounded-lg transition-colors border ${
+                                                        className={`p-1.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors border flex items-center justify-center ${
                                                             t.isFeatured 
                                                                 ? 'bg-yellow-600/20 text-yellow-500 border-yellow-500/30 hover:bg-yellow-600 hover:text-white' 
                                                                 : 'bg-surface/20 text-gray-400 border-gray-500/30 hover:bg-surface hover:text-white'
                                                         }`}
                                                         title={t.isFeatured ? "Unfeature" : "Feature"}
+                                                        aria-label={t.isFeatured ? `Unfeature ${t.title}` : `Feature ${t.title}`}
                                                     >
-                                                        <Megaphone className="w-3 h-3" />
+                                                        <Megaphone className="w-4 h-4" />
                                                     </button>
                                                     {t.status !== 'cancelled' && t.status !== 'completed' && (
                                                         <button type="button" 
                                                             onClick={() => handleCancelTournament(t)}
-                                                            className="p-2.5 min-w-[44px] min-h-[44px] bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white rounded-lg transition-colors border border-red-500/30"
+                                                            className="p-2.5 min-w-[44px] min-h-[44px] bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white rounded-lg transition-colors border border-red-500/30 flex items-center justify-center"
                                                             title="Cancel Tournament"
+                                                            aria-label={`Cancel tournament ${t.title}`}
                                                         >
                                                             <X className="w-4 h-4" />
                                                         </button>

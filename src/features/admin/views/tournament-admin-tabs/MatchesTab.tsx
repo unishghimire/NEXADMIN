@@ -3,8 +3,8 @@ import { motion } from 'motion/react';
 import { Calendar, Clock, Users, MapPin, Layers, Loader2 } from 'lucide-react';
 import { TournamentAdminTabProps } from './types';
 import Modal from '../../../../shared/components/Modal';
-import ResultUploader from '../../../results/components/ResultUploader';
-import PerKillResultUploader from '../../../tournaments/components/PerKillResultUploader';
+import ResultUploader from '../../components/ResultUploader';
+import PerKillResultUploader from '../../components/PerKillResultUploader';
 import { isBRTournament } from '../../../../shared/services/tournamentEngine';
 import { getMapsForGame } from '../../../../shared/constants/constants';
 

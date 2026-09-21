@@ -10,7 +10,7 @@
     "liveTournaments": {
       "$tournamentId": {
         ".read": true,
-        ".write": "auth != null && (auth.token.role === 'admin' || auth.token.role === 'organizer')",
+        ".write": "auth != null && (auth.token.role === 'admin' || (auth.token.role === 'organizer' && (!data.exists() ? newData.child('hostUid').val() === auth.uid : data.child('hostUid').val() === auth.uid)))",
         "groups": {
           "$groupId": {
             ".validate": "newData.hasChildren(['lobbyStatus'])"
@@ -21,19 +21,19 @@
     "live_rooms": {
       "$tournamentId": {
         ".read": "auth != null",
-        ".write": "auth != null && (auth.token.role === 'admin' || auth.token.role === 'organizer')"
+        ".write": "auth != null && (auth.token.role === 'admin' || (auth.token.role === 'organizer' && (!data.exists() ? newData.child('hostUid').val() === auth.uid : data.child('hostUid').val() === auth.uid)))"
       }
     },
     "live_matches": {
       "$tournamentId": {
         ".read": true,
-        ".write": "auth != null && (auth.token.role === 'admin' || auth.token.role === 'organizer')"
+        ".write": "auth != null && (auth.token.role === 'admin' || (auth.token.role === 'organizer' && (!data.exists() ? newData.child('hostUid').val() === auth.uid : data.child('hostUid').val() === auth.uid)))"
       }
     },
     "liveMatches": {
       "$matchId": {
         ".read": true,
-        ".write": "auth != null && (auth.token.role === 'admin' || auth.token.role === 'organizer')",
+        ".write": "auth != null && (auth.token.role === 'admin' || (auth.token.role === 'organizer' && (!data.exists() ? newData.child('hostUid').val() === auth.uid : data.child('hostUid').val() === auth.uid)))",
         "liveScores": {
           "$teamId": {
             ".validate": "newData.hasChildren(['totalPoints', 'kills'])"
@@ -44,7 +44,7 @@
     "liveLeaderboards": {
       "$tournamentId": {
         ".read": true,
-        ".write": "auth != null && (auth.token.role === 'admin' || auth.token.role === 'organizer')"
+        ".write": "auth != null && (auth.token.role === 'admin' || (auth.token.role === 'organizer' && (!data.exists() ? newData.child('hostUid').val() === auth.uid : data.child('hostUid').val() === auth.uid)))"
       }
     },
     "liveEvents": {
@@ -61,6 +61,10 @@
           ".validate": "newData.hasChildren(['senderId', 'message', 'timestamp']) && newData.child('message').isString() && newData.child('message').val().length <= 500"
         }
       }
+    },
+    "admin_monitoring": {
+      ".read": "auth != null && auth.token.role === 'admin'",
+      ".write": "auth != null && auth.token.role === 'admin'"
     }
   }
 }

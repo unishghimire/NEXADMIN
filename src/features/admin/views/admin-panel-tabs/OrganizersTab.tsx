@@ -5,7 +5,6 @@ import { AdminPanelTabProps } from './types';
 
 export const OrganizersTab: React.FC<AdminPanelTabProps> = (props) => {
     const { formatCurrency, handleSaveOrgDetails, handleSuspendOrg, isOrgEditModalOpen, orgDiscord, orgEmail, orgNameEdit, orgWhatsapp, orgYoutube, organizers, setIsOrgEditModalOpen, setOrgDiscord, setOrgEmail, setOrgNameEdit, setOrgWhatsapp, setOrgYoutube, togglePowerOrganizer, setEditingOrg } = props;
-    const [processingId, setProcessingId] = useState<string | null>(null);
     return (
                 <div className="bg-card p-6 rounded-xl border border-slate-800 space-y-6">
                     <div className="flex justify-between items-center border-b border-slate-700 pb-4">
@@ -14,6 +13,12 @@ export const OrganizersTab: React.FC<AdminPanelTabProps> = (props) => {
                         </h2>
                     </div>
 
+                    {organizers.length === 0 ? (
+                        <div className="py-12 text-center bg-dark rounded-2xl border border-slate-800">
+                            <Users className="w-10 h-10 text-gray-700 mx-auto mb-3" />
+                            <p className="text-sm text-gray-500 font-bold">No registered organizers found.</p>
+                        </div>
+                    ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {organizers.map(org => (
                             <div key={org.uid} className="bg-dark p-5 rounded-2xl border border-slate-800 space-y-4 relative overflow-hidden group">
@@ -87,6 +92,7 @@ export const OrganizersTab: React.FC<AdminPanelTabProps> = (props) => {
                             </div>
                         ))}
                     </div>
+                    )}
 
                     {isOrgEditModalOpen && (
                         <div className="fixed inset-0 modal-backdrop backdrop-blur-sm z-[100] flex items-center justify-center p-4">

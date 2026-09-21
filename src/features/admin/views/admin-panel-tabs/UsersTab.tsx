@@ -5,7 +5,11 @@ import { AdminPanelTabProps } from './types';
 
 export const UsersTab: React.FC<AdminPanelTabProps> = (props) => {
     const { formatCurrency, handleSuspendOrg, handleUpdateUserRole, searchQuery, setSearchQuery, users, setSelectedUser } = props;
-    const [processingId, setProcessingId] = useState<string | null>(null);
+    const filteredUsers = users.filter(u => 
+        (u.username || '').toLowerCase().includes((searchQuery || '').toLowerCase()) || 
+        (u.email || '').toLowerCase().includes((searchQuery || '').toLowerCase())
+    );
+
     return (
                 <div className="bg-card p-6 rounded-xl border border-gray-800 space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-700 pb-4">
@@ -15,7 +19,7 @@ export const UsersTab: React.FC<AdminPanelTabProps> = (props) => {
                         <div className="relative w-full md:w-64">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
                             <input 
-                                type="text"
+                                type="text" 
                                 placeholder="Search users..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -36,12 +40,7 @@ export const UsersTab: React.FC<AdminPanelTabProps> = (props) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-800/50">
-                                {users
-                                    .filter(u => 
-                                        (u.username || '').toLowerCase().includes((searchQuery || '').toLowerCase()) || 
-                                        (u.email || '').toLowerCase().includes((searchQuery || '').toLowerCase())
-                                    )
-                                    .map(u => (
+                                {filteredUsers.map(u => (
                                     <tr key={u.uid} className="hover:bg-white/[0.02] transition-colors">
                                         <td className="px-4 py-4">
                                             <div className="flex items-center gap-3">
@@ -89,6 +88,7 @@ export const UsersTab: React.FC<AdminPanelTabProps> = (props) => {
                                                             ? 'bg-green-600/20 text-green-400 border-green-500/30 hover:bg-green-600 hover:text-white' 
                                                             : 'bg-red-600/20 text-red-400 border-red-500/30 hover:bg-red-600 hover:text-white'
                                                     }`}
+                                                    title={u.isBanned ? 'Reactivate Account' : 'Suspend Account'}
                                                 >
                                                     {u.isBanned ? <CheckCircle className="w-3.5 h-3.5" /> : <Trash className="w-3.5 h-3.5" />}
                                                 </button>
@@ -96,24 +96,16 @@ export const UsersTab: React.FC<AdminPanelTabProps> = (props) => {
                                         </td>
                                     </tr>
                                 ))}
-                                {users.length === 0 && (
+                                {filteredUsers.length === 0 && (
                                     <tr>
-                                        <td colSpan={5} className="text-center py-8 text-gray-500 text-sm">
-                                            No registered users found.
+                                        <td colSpan={5} className="text-center py-12 text-gray-500 text-sm">
+                                            <Users className="w-10 h-10 text-gray-700 mx-auto mb-3" />
+                                            <p className="font-bold">{users.length === 0 ? 'No registered users found.' : 'No users match your search query.'}</p>
                                         </td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
-                        {users.filter(u => 
-                            (u.username || '').toLowerCase().includes((searchQuery || '').toLowerCase()) || 
-                            (u.email || '').toLowerCase().includes((searchQuery || '').toLowerCase())
-                        ).length === 0 && (
-                            <div className="py-12 text-center">
-                                <Users className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-                                <p className="text-sm text-gray-500 font-bold">No users found.</p>
-                            </div>
-                        )}
                     </div>
                 </div>
     );

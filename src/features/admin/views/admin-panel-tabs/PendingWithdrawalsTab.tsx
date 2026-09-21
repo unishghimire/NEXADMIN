@@ -22,6 +22,7 @@ export const PendingWithdrawalsTab: React.FC<AdminPanelTabProps> = (props) => {
         users = [],
         closeConfirmModal, 
         formatCurrency, 
+        formatCurrencyExact,
         getRelativeTime, 
         handleApproveTx, 
         handleRejectTx, 
@@ -176,10 +177,10 @@ export const PendingWithdrawalsTab: React.FC<AdminPanelTabProps> = (props) => {
                                         </div>
                                         <div className="text-right">
                                             <div className="text-xl font-black text-red-400 tracking-tight font-mono">
-                                                -{formatCurrency(Math.abs(t.amount))}
+                                                -{(formatCurrencyExact || formatCurrency)(Math.abs(t.amount))}
                                             </div>
                                             <span className="text-[10px] text-slate-500 font-mono">
-                                                Rem. Bal: {formatCurrency(userTotalBalance)}
+                                                Rem. Bal: {(formatCurrencyExact || formatCurrency)(userTotalBalance)}
                                             </span>
                                         </div>
                                     </div>

@@ -76,7 +76,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
         );
     }
 
-    if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
+    const effectiveRole = user?.role || profile?.role;
+    if (allowedRoles && (!effectiveRole || !allowedRoles.includes(effectiveRole))) {
         return (
             <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 text-center px-4">
                 <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mb-2">
@@ -84,7 +85,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
                 </div>
                 <h2 className="text-xl font-black text-white uppercase tracking-wider">Access Restricted</h2>
                 <p className="text-sm text-slate-400 max-w-md">
-                    Your account ({profile.email || user.email}) does not have administrative privileges for the NexPlay Master Suite.
+                    Your account ({profile?.email || user?.email}) does not have administrative privileges for the NexPlay Master Suite.
                 </p>
                 <div className="flex gap-3 mt-2">
                     <button
@@ -93,12 +94,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
                     >
                         Sign Out
                     </button>
-                    <a
-                        href={import.meta.env.VITE_MAIN_APP_URL || 'https://www.nexplayorg.app'}
-                        className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition"
-                    >
-                        Go to Main App
-                    </a>
+                    {effectiveRole === 'organizer' ? (
+                        <a
+                            href="https://nexorg-lyart.vercel.app/"
+                            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition"
+                        >
+                            Organizer Portal
+                        </a>
+                    ) : (
+                        <a
+                            href={import.meta.env.VITE_MAIN_APP_URL || 'https://www.nexplayorg.app'}
+                            className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition"
+                        >
+                            Go to Main App
+                        </a>
+                    )}
                 </div>
             </div>
         );

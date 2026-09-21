@@ -10,6 +10,7 @@ import ProtectedRoute from './shared/components/ProtectedRoute';
 import ScrollToTop from './shared/components/ScrollToTop';
 
 const AdminPanel = lazy(() => import('./features/admin/views/AdminPanel'));
+const TournamentAdminPanel = lazy(() => import('./features/admin/views/TournamentAdminPanel'));
 const Login = lazy(() => import('./features/auth/views/Login'));
 
 const LoadingFallback = () => (
@@ -35,6 +36,16 @@ const AppContent = () => {
             <Route path="/admin" element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminPanel />
+              </ProtectedRoute>
+            } />
+            <Route path="/tournaments/:id/admin" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <TournamentAdminPanel />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/tournaments/:id" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <TournamentAdminPanel />
               </ProtectedRoute>
             } />
             <Route path="/login" element={<Login />} />

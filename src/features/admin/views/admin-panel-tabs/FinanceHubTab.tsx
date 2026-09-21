@@ -46,7 +46,7 @@ export const FinanceHubTab: React.FC<AdminPanelTabProps> = (props) => {
     // 3. Calculate Total Locked Escrow in Active Tournaments and Scrims
     const escrowAnalytics = useMemo(() => {
         const activeEvents = (allTournaments as Tournament[]).filter(
-            t => t.status === 'upcoming' || t.status === 'published' || t.status === 'live' || t.status === 'open'
+            t => t.status === 'upcoming' || t.status === 'published' || t.status === 'live' || (t.status as string) === 'open'
         );
 
         let lockedEntryFees = 0;

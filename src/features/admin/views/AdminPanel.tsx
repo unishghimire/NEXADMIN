@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNotification } from '../../../shared/context/NotificationContext';
 import { formatCurrency, formatDate } from '../../../shared/utils/utils';
 import ConfirmModal from '../../../shared/components/ConfirmModal';
-import TournamentCreateModal from '../../tournaments/components/TournamentCreateModal';
+import TournamentCreateModal from '../components/TournamentCreateModal';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import TransactionHistoryTab from '../components/TransactionHistoryTab';
 import {

@@ -1,18 +1,37 @@
 import Seo from '../../../shared/components/Seo';
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../../../shared/context/NotificationContext';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { motion } from 'motion/react';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react';
-import { signInWithEmailAndPassword, signInWithRedirect, signInWithPopup, getRedirectResult, sendPasswordResetEmail } from 'firebase/auth';
-import { auth, googleProvider, appleProvider } from '../../../shared/config/firebase';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { signInWithEmailAndPassword, signInWithRedirect, signInWithPopup, getRedirectResult, sendPasswordResetEmail, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, auth, googleProvider, appleProvider } from '../../../shared/config/firebase';
 import { isSafeInternalPath } from '../../../shared/utils/utils';
 import { executeRecaptchaEnterprise } from '../../../shared/utils/recaptchaEnterprise';
 
+async function verifyAdminStatus(firebaseUser: any): Promise<boolean> {
+    try {
+        const tokenResult = await firebaseUser.getIdTokenResult(true);
+        if (tokenResult.claims?.role === 'admin') {
+            return true;
+        }
+    } catch {}
+
+    try {
+        const userDocSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+        if (userDocSnap.exists() && userDocSnap.data()?.role === 'admin') {
+            return true;
+        }
+    } catch {}
+
+    return false;
+}
+
 const Login: React.FC = () => {
     const { showToast } = useNotification();
-    const { user, loading: authLoading, profileLoading, authError, retryAuth } = useAuth();
+    const { user, profile, loading: authLoading, profileLoading, authError, retryAuth, logout } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -31,22 +50,35 @@ const Login: React.FC = () => {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [isAppleLoading, setIsAppleLoading] = useState(false);
     const [error, setError] = useState('');
-    const [captchaValue, setCaptchaValue] = useState<string | null>(null);
-    // Captures the ProtectedRoute `from` on mount so a retry after authError lands
-    // back on the intended page; overwritten by the handlers on a fresh submit.
     const [redirectTarget, setRedirectTarget] = useState<string>(() => getRedirectTarget());
     const submittingRef = useRef(false);
     const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY?.trim();
 
-    // Redirect once the user is authenticated and auth has resolved.
-    // Don't wait for profileLoading or authError — the user IS authenticated,
-    // and authError only means the profile doc couldn't be loaded (not that
-    // the sign-in failed). ProtectedRoute handles authError with a retry UI.
+    // Verify authenticated user role: only 'admin' is permitted to enter
     useEffect(() => {
-        if (user && !authLoading) {
-            navigate(redirectTarget, { replace: true });
-        }
-    }, [user, authLoading, redirectTarget, navigate]);
+        if (!user || authLoading || profileLoading) return;
+
+        const checkRole = async () => {
+            const firebaseUser = auth.currentUser;
+            let isAdmin = false;
+            if (firebaseUser) {
+                isAdmin = await verifyAdminStatus(firebaseUser);
+            } else if (profile?.role === 'admin' || user?.role === 'admin') {
+                isAdmin = true;
+            }
+
+            if (isAdmin) {
+                navigate(redirectTarget, { replace: true });
+            } else {
+                await logout();
+                const roleName = profile?.role || user?.role || 'player';
+                setError(`Access Denied: Your account (${profile?.email || user.email}) is registered as '${roleName}'. The NexAdmin Portal is strictly restricted to platform administrators only.`);
+                showToast('Access Denied: Only administrators can log in here.', 'error');
+            }
+        };
+
+        void checkRole();
+    }, [user, profile, authLoading, profileLoading, redirectTarget, navigate, logout, showToast]);
 
     // Handle the result of signInWithRedirect (fires after the page reloads from OAuth).
     useEffect(() => {
@@ -57,14 +89,25 @@ const Login: React.FC = () => {
         if (pendingApple) setIsAppleLoading(true);
 
         getRedirectResult(auth)
-            .then((result) => {
+            .then(async (result) => {
                 if (cancelled) return;
                 sessionStorage.removeItem('google-redirect-pending');
                 sessionStorage.removeItem('apple-redirect-pending');
-                if (result) {
-                    showToast('Welcome back!', 'success');
+                if (result && result.user) {
+                    const isAdmin = await verifyAdminStatus(result.user);
+
+                    if (!isAdmin) {
+                        await signOut(auth);
+                        setIsGoogleLoading(false);
+                        setIsAppleLoading(false);
+                        const msg = `Access Denied: Account '${result.user.email}' does not have administrator privileges. The NexAdmin Portal is restricted to platform administrators only.`;
+                        setError(msg);
+                        showToast(msg, 'error');
+                        return;
+                    }
+
+                    showToast('Welcome back, Administrator!', 'success');
                     setRedirectTarget(getRedirectTarget());
-                    // Keep loading — the auth state change will navigate once settled.
                 } else {
                     setIsGoogleLoading(false);
                     setIsAppleLoading(false);
@@ -92,8 +135,7 @@ const Login: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // If profile initialization fails, release the loading state so the user can
-    // retry instead of staring at an indefinite spinner.
+    // If profile initialization fails, release the loading state so the user can retry
     useEffect(() => {
         if (authError && (isLoading || isGoogleLoading || isAppleLoading)) {
             setIsLoading(false);
@@ -102,9 +144,7 @@ const Login: React.FC = () => {
         }
     }, [authError, isLoading, isGoogleLoading, isAppleLoading]);
 
-    // Safety net: if sign-in succeeded but the auth state never settles (e.g. the
-    // Firebase auth callback did not fire), unblock the form after a bounded wait
-    // instead of leaving it stuck in loading.
+    // Safety net: unblock form after bounded wait
     useEffect(() => {
         if ((!isLoading && !isGoogleLoading && !isAppleLoading) || user || authLoading || authError) return;
         const timer = setTimeout(() => {
@@ -122,17 +162,31 @@ const Login: React.FC = () => {
         if (submittingRef.current || user) return;
         submittingRef.current = true;
         setIsLoading(true);
+        setError('');
 
         try {
             // Invisible reCAPTCHA Enterprise background verification token
             if (recaptchaSiteKey) {
                 await executeRecaptchaEnterprise('LOGIN');
             }
-            await signInWithEmailAndPassword(auth, email, password);
-            showToast('Welcome back!', 'success');
+            const cred = await signInWithEmailAndPassword(auth, email, password);
+
+            // Immediate admin role verification
+            const isAdmin = await verifyAdminStatus(cred.user);
+
+            if (!isAdmin) {
+                await signOut(auth);
+                submittingRef.current = false;
+                setIsLoading(false);
+                const msg = `Access Denied: Your account (${cred.user.email}) does not have administrator privileges. The NexAdmin Portal is strictly restricted to platform administrators.`;
+                setError(msg);
+                showToast(msg, 'error');
+                return;
+            }
+
+            showToast('Welcome back, Administrator!', 'success');
             setRedirectTarget(getRedirectTarget());
-            // Keep the loading state on success — the redirect effect above navigates
-            // once the session is settled, which prevents double-submits.
+            // Keep the loading state on success — the redirect effect navigates once session settles.
         } catch (err: any) {
             submittingRef.current = false;
             setIsLoading(false);
@@ -158,26 +212,40 @@ const Login: React.FC = () => {
         setIsGoogleLoading(true);
 
         try {
-            // ponytail: prefer popup (no cross-origin storage needed); fall back to
-            // redirect if the popup is blocked or fails.  signInWithRedirect requires
-            // third-party storage access on the auth domain, which modern browsers
-            // increasingly block — popup avoids that entirely.
+            let credUser = null;
             try {
-                await signInWithPopup(auth, googleProvider);
-                // onAuthStateChanged in AuthContext handles the rest.
+                const res = await signInWithPopup(auth, googleProvider);
+                credUser = res.user;
             } catch (popupErr: any) {
                 if (popupErr?.code === 'auth/popup-blocked' || popupErr?.code === 'auth/cancelled-popup-request') {
                     // Fall back to redirect — set flag for the redirect handler
                     sessionStorage.setItem('google-redirect-pending', 'true');
                     await signInWithRedirect(auth, googleProvider);
+                    return;
                 } else {
                     throw popupErr;
                 }
             }
+
+            if (credUser) {
+                const isAdmin = await verifyAdminStatus(credUser);
+
+                if (!isAdmin) {
+                    await signOut(auth);
+                    submittingRef.current = false;
+                    setIsGoogleLoading(false);
+                    const msg = `Access Denied: Your account (${credUser.email}) does not have administrator privileges. Only platform administrators are permitted to enter NexAdmin.`;
+                    setError(msg);
+                    showToast(msg, 'error');
+                    return;
+                }
+
+                showToast('Welcome back, Administrator!', 'success');
+                setRedirectTarget(getRedirectTarget());
+            }
         } catch (err: any) {
             submittingRef.current = false;
             setIsGoogleLoading(false);
-            // User cancelling the popup is not an error
             if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
                 return;
             }
@@ -202,15 +270,35 @@ const Login: React.FC = () => {
         setIsAppleLoading(true);
 
         try {
+            let credUser = null;
             try {
-                await signInWithPopup(auth, appleProvider);
+                const res = await signInWithPopup(auth, appleProvider);
+                credUser = res.user;
             } catch (popupErr: any) {
                 if (popupErr?.code === 'auth/popup-blocked' || popupErr?.code === 'auth/cancelled-popup-request') {
                     sessionStorage.setItem('apple-redirect-pending', 'true');
                     await signInWithRedirect(auth, appleProvider);
+                    return;
                 } else {
                     throw popupErr;
                 }
+            }
+
+            if (credUser) {
+                const isAdmin = await verifyAdminStatus(credUser);
+
+                if (!isAdmin) {
+                    await signOut(auth);
+                    submittingRef.current = false;
+                    setIsAppleLoading(false);
+                    const msg = `Access Denied: Your account (${credUser.email}) does not have administrator privileges. Only platform administrators are permitted to enter NexAdmin.`;
+                    setError(msg);
+                    showToast(msg, 'error');
+                    return;
+                }
+
+                showToast('Welcome back, Administrator!', 'success');
+                setRedirectTarget(getRedirectTarget());
             }
         } catch (err: any) {
             submittingRef.current = false;
@@ -232,7 +320,6 @@ const Login: React.FC = () => {
         }
     };
 
-
     const handleForgotPassword = async () => {
         if (!email || !email.includes('@')) {
             showToast('Please enter a valid email address first', 'warning');
@@ -251,8 +338,8 @@ const Login: React.FC = () => {
     return (
         <>
         <Seo
-            title="Login | NexPlay"
-            description="Log in to your NexPlay account."
+            title="Admin Login | NexPlay"
+            description="Log in to the NexPlay Admin Command Center."
             canonicalPath="/login"
             noindex
         />
@@ -262,18 +349,26 @@ const Login: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 className="max-w-md w-full"
             >
-                <div className="text-center mb-12">
-                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-brand-500/10 border border-brand-500/20 mb-6">
-                        <ShieldCheck className="w-10 h-10 text-brand-500" />
+                <div className="text-center mb-10">
+                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-red-500/10 border border-red-500/25 mb-4 shadow-lg shadow-red-500/10">
+                        <ShieldAlert className="w-10 h-10 text-red-400" />
                     </div>
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tighter uppercase mb-2">Welcome Back</h2>
-                    <p className="text-gray-400 font-bold">Login to access your NexPlay account</p>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-500/10 border border-red-500/30 rounded-full text-[10px] font-black uppercase tracking-widest text-red-400 mb-3">
+                        <ShieldAlert className="w-3 h-3" />
+                        Restricted Access • NexPlay Admin Suite
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight uppercase mb-2">
+                        Admin Command Center
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-400 font-medium max-w-sm mx-auto">
+                        This portal is strictly restricted to verified platform administrators. Player and Organizer accounts cannot sign in here.
+                    </p>
                 </div>
 
                 <div className="bg-card/50 border border-gray-800 rounded-2xl sm:rounded-3xl p-5 sm:p-8 md:p-10 shadow-2xl">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label htmlFor="email" className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">Email Address</label>
+                            <label htmlFor="email" className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">Administrator Email</label>
                             <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-gray-500 group-focus-within:text-brand-500 transition">
                                     <Mail className="w-5 h-5" />
@@ -285,7 +380,7 @@ const Login: React.FC = () => {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="block w-full pl-14 pr-6 py-4 bg-black border border-gray-800 rounded-2xl text-white placeholder-gray-700 focus:focus-visible:outline-none focus:border-brand-500 transition font-bold"
-                                    placeholder="Enter your email"
+                                    placeholder="admin@nexplay.gg"
                                 />
                             </div>
                         </div>
@@ -329,9 +424,10 @@ const Login: React.FC = () => {
                             <motion.div 
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
-                                className="bg-red-500/10 border border-red-500/20 text-red-400 px-5 py-4 rounded-2xl text-xs font-black uppercase tracking-widest"
+                                className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-2xl text-xs font-bold leading-relaxed flex items-start gap-3"
                             >
-                                {error}
+                                <ShieldAlert className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                                <div>{error}</div>
                             </motion.div>
                         )}
 
@@ -361,13 +457,13 @@ const Login: React.FC = () => {
                         <button
                             type="submit"
                             disabled={isLoading || isGoogleLoading || !!user}
-                            className="w-full flex items-center justify-center py-5 px-6 rounded-2xl text-sm font-black text-white bg-brand-500 hover:bg-brand-400 focus:focus-visible:outline-none transition disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest shadow-lg shadow-brand-500/20"
+                            className="w-full flex items-center justify-center py-5 px-6 rounded-2xl text-sm font-black text-white bg-brand-500 hover:bg-brand-400 focus:focus-visible:outline-none transition disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest shadow-lg shadow-brand-500/20 cursor-pointer"
                         >
                             {isLoading ? (
                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                             ) : (
                                 <>
-                                    Login Now <ArrowRight className="ml-2 w-5 h-5" />
+                                    Admin Sign In <ArrowRight className="ml-2 w-5 h-5" />
                                 </>
                             )}
                         </button>
@@ -384,7 +480,7 @@ const Login: React.FC = () => {
                             type="button"
                             onClick={handleGoogleSignIn}
                             disabled={isLoading || isGoogleLoading || isAppleLoading || !!user}
-                            className="w-full flex items-center justify-center py-5 px-6 border border-gray-800 rounded-2xl bg-black text-sm font-black text-white hover:bg-card focus:focus-visible:outline-none transition disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest"
+                            className="w-full flex items-center justify-center py-5 px-6 border border-gray-800 rounded-2xl bg-black text-sm font-black text-white hover:bg-card focus:focus-visible:outline-none transition disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest cursor-pointer"
                         >
                             {isGoogleLoading ? (
                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -408,19 +504,30 @@ const Login: React.FC = () => {
                                             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                                         />
                                     </svg>
-                                    Google
+                                    Google Admin Sign In
                                 </>
                             )}
                         </button>
                     </div>
 
-                    <div className="mt-10 pt-8 border-t border-gray-800 text-center">
-                        <p className="text-sm text-gray-500 font-bold">
-                            Don't have an account?{' '}
-                            <Link to="/register" className="text-brand-500 font-black hover:text-brand-400 transition uppercase tracking-widest text-xs">
-                                Create Account
-                            </Link>
+                    <div className="mt-8 pt-6 border-t border-gray-800 text-center space-y-3">
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">
+                            Not a NexPlay Platform Administrator?
                         </p>
+                        <div className="flex flex-wrap justify-center items-center gap-3 text-xs font-black">
+                            <a
+                                href="https://www.nexplayorg.app"
+                                className="px-3.5 py-2 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 border border-brand-500/20 transition uppercase tracking-wider flex items-center gap-1"
+                            >
+                                🎮 Player Portal →
+                            </a>
+                            <a
+                                href="https://nexorg-lyart.vercel.app/"
+                                className="px-3.5 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 transition uppercase tracking-wider flex items-center gap-1"
+                            >
+                                🏢 Organizer Portal →
+                            </a>
+                        </div>
                     </div>
                 </div>
             </motion.div>

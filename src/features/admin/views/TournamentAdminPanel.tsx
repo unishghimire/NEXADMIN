@@ -35,9 +35,9 @@ export default function TournamentAdminPanel() {
                 {/* Top row: back button + title */}
                 <div className="flex items-center gap-3 sm:gap-6">
                     <button type="button" 
-                        onClick={() => navigate(`/tournaments/${tournament.id}`)}
+                        onClick={() => navigate('/admin')}
                         className="p-2.5 sm:p-3 bg-dark border border-gray-800 rounded-full text-gray-400 hover:text-white hover:border-brand-500 transition-colors hover:bg-card shrink-0 touch-target"
-                        aria-label="Back to tournament"
+                        aria-label="Back to Admin Panel"
                     >
                         <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
@@ -85,13 +85,16 @@ export default function TournamentAdminPanel() {
                         {tournament.stage || 'registration'}
                     </span>
                     {(tournament.matchType === 'scrims' || (tournament as any).isScrim) && (
-                        <button type="button"
-                            onClick={() => navigate(`/organizer/scrim/${tournament.id}`)}
+                        <a
+                            href={`https://nexorg-lyart.vercel.app/scrim/${tournament.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="px-3 sm:px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 transition-colors flex items-center gap-1.5"
+                            title="Open in Organizer Portal"
                         >
-                            <span>Scrim Slot View</span>
+                            <span>Scrim Slot View (Org Portal)</span>
                             <ArrowRight className="w-3 h-3" />
-                        </button>
+                        </a>
                     )}
                 </div>
             </div>
