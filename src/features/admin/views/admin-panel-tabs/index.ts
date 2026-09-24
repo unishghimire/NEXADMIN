@@ -16,5 +16,6 @@ export { MediaTab } from './MediaTab';
 export { default as NewsTab } from './NewsTab';
 export { DisputesTab } from './DisputesTab';
 export { SettingsTab } from './SettingsTab';
+export { TournamentResultsTab } from './TournamentResultsTab';
 export type { AdminPanelTabProps } from './types';
 

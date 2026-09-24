@@ -199,6 +199,56 @@ export const adminApiClient = {
         apiRequest('/api/admin/results', {
             method: 'POST',
             body: JSON.stringify(payload)
+        }),
+
+    // Tournament Stage Validation & Processing Oversight
+    getStagesSummary: () =>
+        apiRequest('/api/admin/stages', { method: 'GET' }),
+
+    getTournamentStages: (tournamentId: string, stageNumber?: number) => {
+        const params = new URLSearchParams({ tournamentId });
+        if (stageNumber) params.set('stageNumber', String(stageNumber));
+        return apiRequest(`/api/admin/stages?${params.toString()}`, { method: 'GET' });
+    },
+
+    validateStage: (tournamentId: string, stageNumber: number) =>
+        apiRequest('/api/admin/stages', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'VALIDATE_STAGE', tournamentId, stageNumber })
+        }),
+
+    processStage: (tournamentId: string, stageNumber: number) =>
+        apiRequest('/api/admin/stages', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'PROCESS_STAGE', tournamentId, stageNumber })
+        }),
+
+    overrideQualification: (payload: {
+        tournamentId: string;
+        stageNumber: number;
+        teamId: string;
+        newStatus: 'qualified' | 'eliminated';
+        reason: string;
+    }) =>
+        apiRequest('/api/admin/stages', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'OVERRIDE_QUALIFICATION', ...payload })
+        }),
+
+    correctStageResult: (payload: {
+        tournamentId: string;
+        stageNumber: number;
+        matchId: string;
+        teamId: string;
+        placement: number;
+        kills: number;
+        reason: string;
+    }) =>
+        apiRequest('/api/admin/stages', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'CORRECT_RESULT', ...payload })
         })
 };
+
+export const adminApi = adminApiClient;
 

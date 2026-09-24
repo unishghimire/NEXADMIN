@@ -48,7 +48,8 @@ import {
     MediaTab,
     NewsTab,
     SettingsTab,
-    DisputesTab
+    DisputesTab,
+    TournamentResultsTab
 } from './admin-panel-tabs';
 import DiscordAdminPanel from '../components/DiscordAdminPanel';
 import { useAdminData } from '../hooks/useAdminData';
@@ -260,6 +261,14 @@ const AdminPanel: React.FC = () => {
             label: 'Official Tournaments',
             shortLabel: 'Tournaments',
             description: 'Create and oversee official platform tournaments and brackets',
+            department: 'content',
+            icon: Trophy
+        },
+        {
+            id: 'tab-tournament-results',
+            label: 'Tournament Results & Stages',
+            shortLabel: 'Results & Stages',
+            description: 'Stage validation, missing result tracking, strict processing rules & qualification',
             department: 'content',
             icon: Trophy
         },
@@ -626,6 +635,7 @@ const AdminPanel: React.FC = () => {
                 </div>
                 {activeTab === 'tab-dashboard' && <TabErrorBoundary tabName="Dashboard Tab"><DashboardTab {...tabProps} /></TabErrorBoundary>}
                 {activeTab === 'tab-tournaments' && <TabErrorBoundary tabName="Tournaments Tab"><TournamentsTab {...tabProps} /></TabErrorBoundary>}
+                {activeTab === 'tab-tournament-results' && <TabErrorBoundary tabName="Tournament Results Tab"><TournamentResultsTab /></TabErrorBoundary>}
                 {activeTab === 'tab-org-approvals' && <TabErrorBoundary tabName="Org Approvals Tab"><OrgApprovalsTab {...tabProps} /></TabErrorBoundary>}
                 {activeTab === 'tab-org-tournaments' && <TabErrorBoundary tabName="Org Tournaments Tab"><OrgTournamentsTab {...tabProps} /></TabErrorBoundary>}
                 {activeTab === 'tab-users' && <TabErrorBoundary tabName="Users Tab"><UsersTab {...tabProps} /></TabErrorBoundary>}
