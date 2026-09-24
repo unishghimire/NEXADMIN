@@ -220,7 +220,7 @@ export const PerKillResultUploader: React.FC<PerKillResultUploaderProps> = ({
                         <Target className="w-5 h-5 text-brand-500" />
                         <h3 className="text-sm font-black text-white uppercase tracking-widest">Per-Kill Reward Mode</h3>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-3">
                         <div>
                             <span className="text-gray-500 uppercase font-bold block">Reward/Kill</span>
                             <span className="text-white font-black">{rewardConfig?.rewardPerKill} {rewardConfig?.currency}</span>
@@ -237,6 +237,15 @@ export const PerKillResultUploader: React.FC<PerKillResultUploaderProps> = ({
                             <span className="text-gray-500 uppercase font-bold block">Total Kills</span>
                             <span className="text-brand-400 font-black">{validation.totalKills}</span>
                         </div>
+                    </div>
+                    <div className="pt-2 border-t border-brand-500/20 flex items-center justify-between">
+                        <span className="text-xs text-gray-300">Need 48h deadline tracking, draft saving, server-side validation & audit log?</span>
+                        <a
+                            href={`/admin/results/${tournament.id}?matchId=${match.id}`}
+                            className="text-xs font-black text-brand-400 hover:text-brand-300 uppercase tracking-wider underline ml-2 whitespace-nowrap"
+                        >
+                            Open Result Center &rarr;
+                        </a>
                     </div>
                 </div>
 

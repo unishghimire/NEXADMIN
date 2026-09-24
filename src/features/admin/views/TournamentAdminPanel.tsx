@@ -1,4 +1,4 @@
-import {useParams, useNavigate} from 'react-router-dom';
+import {useParams, useNavigate, Link} from 'react-router-dom';
 import { useNotification } from '../../../shared/context/NotificationContext';
 import {Settings, Users, Calendar, Trophy, ArrowLeft, ArrowRight, ShieldCheck, Download} from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
@@ -84,6 +84,14 @@ export default function TournamentAdminPanel() {
                     <span className="px-3 sm:px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest bg-brand-500/10 text-brand-400 border border-brand-500/30">
                         {tournament.stage || 'registration'}
                     </span>
+                    <Link
+                        to={`/admin/results/${tournament.id}`}
+                        className="px-3 sm:px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-colors flex items-center gap-1.5"
+                        title="Open Result Update & Settlement Center"
+                    >
+                        <Trophy className="w-3.5 h-3.5" />
+                        <span>Results Center</span>
+                    </Link>
                     {(tournament.matchType === 'scrims' || (tournament as any).isScrim) && (
                         <a
                             href={`https://nexorg-lyart.vercel.app/scrim/${tournament.id}`}

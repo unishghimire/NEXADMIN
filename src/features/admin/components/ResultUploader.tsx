@@ -295,6 +295,18 @@ export const ResultUploader: React.FC<ResultUploaderProps> = ({ isOpen, onClose,
                     </div>
                 </div>
 
+                {/* Direct Link to Official Result Center */}
+                <div className="bg-brand-500/10 border border-brand-500/30 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <span className="text-gray-300 font-medium">Looking for full 48-hour deadline countdown, audit trail, server-side validation & publishing?</span>
+                    <a
+                        href={`/admin/results/${tournament.id}?matchId=${match.id}`}
+                        className="text-brand-400 hover:text-brand-300 font-black uppercase tracking-wider text-[11px] flex items-center gap-1 self-start sm:self-auto"
+                    >
+                        <span>Open Result Center</span>
+                        <span>&rarr;</span>
+                    </a>
+                </div>
+
                 {/* Screenshot Upload */}
                 <div className="space-y-3">
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Match Screenshot (Proof)</label>

@@ -178,5 +178,27 @@ export const adminApiClient = {
         apiRequest('/api/admin/disputes', {
             method: 'POST',
             body: JSON.stringify({ disputeId, action, reason })
+        }),
+
+    // Result Update & Settlement Oversight
+    getResultData: (eventId: string, eventType?: 'tournament' | 'scrim') => {
+        const params = new URLSearchParams({ eventId });
+        if (eventType) params.set('eventType', eventType);
+        return apiRequest(`/api/admin/results?${params.toString()}`, { method: 'GET' });
+    },
+
+    updateResult: (payload: {
+        action: 'SAVE_DRAFT' | 'VALIDATE' | 'PUBLISH' | 'REOPEN' | 'CORRECT' | 'LOCK';
+        eventId: string;
+        eventType?: 'tournament' | 'scrim';
+        matchId?: string;
+        results?: any[];
+        reason?: string;
+        scoringConfig?: any;
+    }) =>
+        apiRequest('/api/admin/results', {
+            method: 'POST',
+            body: JSON.stringify(payload)
         })
 };
+

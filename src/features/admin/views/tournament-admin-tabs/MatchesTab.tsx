@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Calendar, Clock, Users, MapPin, Layers, Loader2 } from 'lucide-react';
+import { Calendar, Clock, Users, MapPin, Layers, Loader2, Trophy, ExternalLink } from 'lucide-react';
 import { TournamentAdminTabProps } from './types';
 import Modal from '../../../../shared/components/Modal';
 import ResultUploader from '../../components/ResultUploader';
@@ -17,6 +18,7 @@ export const MatchesTab: React.FC<TournamentAdminTabProps> = (props) => {
         handleAddMatch, handleUpdateScore, getTeamName,
     } = props;
 
+    const navigate = useNavigate();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const isBR = isBRTournament(tournament);
     const availableMaps = getMapsForGame(tournament.game);
@@ -40,13 +42,22 @@ export const MatchesTab: React.FC<TournamentAdminTabProps> = (props) => {
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-4 sm:space-y-6"
             >
-                <div className="flex justify-between items-center border-b border-gray-800 pb-3 sm:pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-800 pb-3 sm:pb-4 gap-3">
                     <div>
                         <h2 className="text-base sm:text-lg font-black uppercase tracking-widest text-white">Match Schedule</h2>
                         <p className="text-xs text-gray-500 font-bold mt-0.5">
                             {isBR ? 'Battle Royale Lobby Matches (Group-wide)' : '1v1 Head-to-Head Matches'}
                         </p>
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => navigate(`/admin/results/${tournament.id}`)}
+                        className="self-start sm:self-auto flex items-center gap-2 px-3.5 py-2 bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 border border-brand-500/30 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm"
+                    >
+                        <Trophy className="w-3.5 h-3.5" />
+                        <span>Open Result Center</span>
+                        <ExternalLink className="w-3 h-3" />
+                    </button>
                 </div>
 
                 {tournament.groups && tournament.groups.some(g => g.matches.length > 0) ? (
@@ -140,17 +151,12 @@ export const MatchesTab: React.FC<TournamentAdminTabProps> = (props) => {
                                                         {isBR ? 'Details' : 'Score'}
                                                     </button>
                                                     <button
-                                                        onClick={() => {
-                                                            const g = tournament.groups?.find(gr => gr.id === group.id);
-                                                            if (g) {
-                                                                setSelectedGroup(g);
-                                                                setSelectedMatch({ groupId: group.id, match });
-                                                                setIsResultUploaderOpen(true);
-                                                            }
-                                                        }}
-                                                        className="bg-brand-600/10 hover:bg-brand-600 text-brand-500 hover:text-white py-2.5 min-h-[44px] rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors border border-brand-500/20"
+                                                        onClick={() => navigate(`/admin/results/${tournament.id}?matchId=${match.id}`)}
+                                                        className="bg-brand-600/10 hover:bg-brand-600 text-brand-500 hover:text-white py-2.5 min-h-[44px] rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors border border-brand-500/20 flex items-center justify-center gap-1.5"
+                                                        title="Open in authoritative Result Center"
                                                     >
-                                                        Result
+                                                        <Trophy className="w-3 h-3" />
+                                                        <span>Result Center</span>
                                                     </button>
                                                 </div>
                                             </div>

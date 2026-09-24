@@ -126,6 +126,13 @@ service cloud.firestore {
       allow update, delete: if false; // IMMUTABLE: cannot be altered or erased
     }
 
+    match /resultAudits/{auditId} {
+      allow read: if isAdmin();
+      // Server-side writes via Admin SDK; immutable for clients
+      allow create: if isAdmin();
+      allow update, delete: if false; // IMMUTABLE
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // SITE SETTINGS — public read, admin write
     // ═══════════════════════════════════════════════════════════════

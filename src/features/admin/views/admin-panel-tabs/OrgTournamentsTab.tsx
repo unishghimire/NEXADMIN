@@ -51,6 +51,14 @@ export const OrgTournamentsTab: React.FC<AdminPanelTabProps> = (props) => {
                                                     >
                                                         <Settings className="w-3.5 h-3.5" />
                                                     </Link>
+                                                    <Link 
+                                                        to={`/admin/results/${t.id}`}
+                                                        className="p-1.5 min-w-[36px] min-h-[36px] bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-lg transition-colors border border-emerald-500/30 flex items-center justify-center"
+                                                        title="Update & Publish Results"
+                                                        aria-label={`Update results for ${t.title}`}
+                                                    >
+                                                        <Trophy className="w-3.5 h-3.5" />
+                                                    </Link>
                                                     <button type="button" 
                                                         onClick={() => handleViewParticipants(t)}
                                                         className="p-1.5 min-w-[36px] min-h-[36px] bg-brand-600/20 hover:bg-brand-600 text-brand-500 hover:text-white rounded-lg transition-colors border border-brand-500/30 flex items-center justify-center"
